@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import { db, doc, setDoc } from '../firebase';
-// import { TermsModal } from '../components/TermsModal'; // Temporariamente desativado
 
 // --- UTILITY FUNCTIONS ---
 
@@ -92,7 +91,6 @@ const Onboarding: React.FC = () => {
   const [tipo, setTipo] = useState<'cliente' | 'vendedor' | 'entregador' | null>(null);
   const [loading, setLoading] = useState(false);
   const [isCepLoading, setIsCepLoading] = useState(false);
-  const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
   const isProcessing = useRef(false);
 
   const [formData, setFormData] = useState({
@@ -302,7 +300,6 @@ const Onboarding: React.FC = () => {
 
   return (
     <>
-    {/* <TermsModal isOpen={isTermsModalOpen} onClose={() => setIsTermsModalOpen(false)} /> */}
     <div className="h-[100dvh] bg-[#0F0F0F] flex flex-col animate-in slide-in-from-right duration-500 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#1a1a1a] via-[#0F0F0F] to-[#0F0F0F]">
       <div className="shrink-0 p-6 md:px-12 pt-8">
         <button onClick={() => setStep(1)} className="text-gray-500 font-bold uppercase text-[10px] tracking-widest mb-6 flex items-center hover:text-white transition-colors">

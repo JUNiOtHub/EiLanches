@@ -18,8 +18,6 @@ import Onboarding from './screens/Onboarding';
 import Profile from './screens/Profile';
 import Rewards from './screens/Rewards';
 import Withdraw from './screens/Withdraw';
-// import SplashScreen from './components/layout/SplashScreen';
-// import ConnectionStatus from './components/common/ConnectionStatus';
 
 // --- Customer Header ---
 const Header: React.FC<{ cartCount: number; isActive: (path: string) => boolean }> = ({ cartCount, isActive }) => {
@@ -187,7 +185,6 @@ const App: React.FC = () => {
                   error: { iconTheme: { primary: '#ef4444', secondary: 'white' } },
                 }}
               />
-              {/* <ConnectionStatus /> */}
               <MainContent />
             </div>
           </div>

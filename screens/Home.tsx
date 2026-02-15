@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db, collection, query, where, onSnapshot } from '../firebase';
-// import SplashScreen from '../components/SplashScreen'; // Tempariamente desativado
 import { motion, AnimatePresence } from 'framer-motion';
 
 const Home: React.FC = () => {

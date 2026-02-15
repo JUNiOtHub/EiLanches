@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { db, doc, getDoc, collection, onSnapshot, query } from '../firebase';
-// import ProductDetailsModal from '../components/ProductDetailsModal';
 import toast from 'react-hot-toast';
 
 const Menu: React.FC = () => {
@@ -136,11 +135,11 @@ const Menu: React.FC = () => {
             acc[item.category].push(item);
             return acc;
           }, {} as Record<string, any[]>)
-        ).map(([category, items]) => (
+        ).map(([category, categoryItems]) => (
           <div key={category} className="mb-8">
             <h2 className="text-xl font-bold text-white mb-4">{category}</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {items.map(item => (
+              {categoryItems.map(item => (
                 <div key={item.id} className="bg-white/10 backdrop-blur-lg rounded-xl p-4 hover:bg-white/20 transition-all cursor-pointer"
                      onClick={() => setSelectedItem(item)}>
                   <div className="flex justify-between items-start mb-2">
@@ -150,8 +149,9 @@ const Menu: React.FC = () => {
                   <p className="text-white/80 text-sm mb-4">{item.description}</p>
                   {item.available ? (
                     <button 
-                      onClick={() => {
-                        addToCart(item, shop.id);
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        addToCart(item, shop.id, shop.nomeLoja || shop.name || 'Loja');
                         setSelectedItem(null);
                         toast.success(`${item.name} adicionado!`);
                       }}
@@ -166,8 +166,8 @@ const Menu: React.FC = () => {
                 </div>
               ))}
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
 
       {/* MODAL DE DETALHES DO PRODUTO */}
@@ -181,7 +181,7 @@ const Menu: React.FC = () => {
             </p>
             <button
               onClick={() => {
-                addToCart(selectedItem, shop.id);
+                addToCart(selectedItem, shop.id, shop.nomeLoja || shop.name || 'Loja');
                 setSelectedItem(null);
                 toast.success(`${selectedItem.name} adicionado!`);
               }}
