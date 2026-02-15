@@ -3,9 +3,6 @@ const requiredEnvs = [
   'VITE_FIREBASE_API_KEY',
   'VITE_FIREBASE_AUTH_DOMAIN',
   'VITE_FIREBASE_PROJECT_ID',
-  'VITE_MERCADO_PAGO_PUBLIC_KEY', // Necessário para o checkout transparente
-  // 'VITE_ASAAS_API_KEY', // Opcional em dev se usar mock
-  // 'VITE_UNSPLASH_ACCESS_KEY' // Opcional, tem fallback no código (embora ideal seja no env)
 ];
 
 export const validateEnv = () => {

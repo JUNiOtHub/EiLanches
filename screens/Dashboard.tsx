@@ -17,9 +17,6 @@ import {
 import { Bar, Line } from 'react-chartjs-2';
 import { db, collection, onSnapshot, query, where, orderBy, updateDoc, doc, firebaseConfig, addDoc, deleteDoc, getDocs, writeBatch, serverTimestamp, getDoc } from '../firebase';
 import { useAuth } from '../context/AuthContext';
-// import { asaasService } from '@/services/asaas'; // Removido - migramos para Mercado Pago
-// import ConfirmationModal from '../components/common/ConfirmationModal'; // Temporariamente desativado
-// import SellerOrderModal from '../components/dashboard/SellerOrderModal'; // Temporariamente desativado
 import { ENV } from '../config/env';
 import { getStatusConfig } from '../utils/statusConfig';
 

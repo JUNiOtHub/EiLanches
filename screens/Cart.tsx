@@ -11,8 +11,6 @@ import { limit, orderBy } from 'firebase/firestore';
 import { paymentService } from '../services/paymentService';
 import { createOrderDocument } from '../services/orderService';
 import { calculateOrderValues } from '../utils/financial';
-// import confetti from 'canvas-confetti'; // Descomente após instalar: npm i canvas-confetti @types/canvas-confetti
-// import SmartUpsellModal from '../components/SmartUpsellModal'; // Temporariamente desativado
 
 // --- CONFIGURAÇÕES DE NEGÓCIO VIA .ENV ---
 const MIN_ORDER = Number(import.meta.env.VITE_PEDIDO_MINIMO) || 15.00;
