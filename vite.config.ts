@@ -5,7 +5,7 @@ import react from '@vitejs/plugin-react';
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, process.cwd(), '');
     return {
-      server: { port: 3000, host: '0.0.0.0' },
+      server: { port: 5000, host: '0.0.0.0', allowedHosts: true },
       plugins: [react()],
       // Variáveis no client devem usar prefixo VITE_ e import.meta.env (ver config/env.ts).
       define: {

@@ -10,48 +10,42 @@ const Orders: React.FC = () => {
   const navigate = useNavigate();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [metrics, setMetrics] = useState({ total: 0, completed: 0, canceled: 0, earnings: 0 });
 
   useEffect(() => {
     if (!user) return;
 
-    console.log("[Orders] Iniciando busca de pedidos para UID:", user.uid);
-
-    // TESTE 1: Query sem orderBy para verificar se é problema de índice
     const q = query(
       collection(db, 'pedidos'),
       where('clienteUid', '==', user.uid)
-      // orderBy('createdAt', 'desc') // REMOVIDO TEMPORARIAMENTE PARA TESTE
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      console.log(`[Orders] Snapshot recebido: ${snapshot.docs.length} documentos`);
+      const allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
       
-      if (snapshot.empty) {
-        console.log("[Orders] Nenhum pedido encontrado para este UID:", user.uid);
-        setOrders([]);
-      } else {
-        const allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
-        console.log("[Orders] Pedidos brutos encontrados:", allOrders.length);
-        
-        // Ordenação manual no frontend (enquanto não temos índice)
-        const sortedOrders = allOrders.sort((a, b) => {
-          const dateA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt).getTime();
-          const dateB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt).getTime();
-          return dateB - dateA; // Mais recentes primeiro
-        });
-        
-        const visibleOrders = sortedOrders.filter((order: any) => order.hiddenForClient !== true);
-        console.log("[Orders] Pedidos visíveis após filtro:", visibleOrders.length);
-        
-        setOrders(visibleOrders);
-      }
+      const sortedOrders = allOrders.sort((a, b) => {
+        const dateA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt).getTime();
+        const dateB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt).getTime();
+        return dateB - dateA;
+      });
+      
+      const visibleOrders = sortedOrders.filter((order: any) => order.hiddenForClient !== true);
+      
+      const completed = visibleOrders.filter(o => o.status === 'concluido');
+      const canceled = visibleOrders.filter(o => o.status === 'cancelado');
+      const earnings = completed.reduce((acc, o) => acc + (Number(o.finalTotal || o.total) || 0), 0);
+
+      setMetrics({
+        total: visibleOrders.length,
+        completed: completed.length,
+        canceled: canceled.length,
+        earnings
+      });
+      
+      setOrders(visibleOrders);
       setLoading(false);
     }, (error) => {
-      console.error("[Orders] Erro no Firebase:", error);
-      console.error("[Orders] Código do erro:", error.code);
-      console.error("[Orders] Mensagem:", error.message);
       setLoading(false);
-      toast.error(`Erro ao carregar pedidos: ${error.message}`);
     });
 
     return () => unsubscribe();
@@ -63,7 +57,17 @@ const Orders: React.FC = () => {
     <div className="min-h-screen bg-[#0F0F0F] p-6 pb-24 animate-in fade-in duration-500">
       <h1 className="text-3xl font-black text-white mb-8">Meus <span className="text-[#FF8C00]">Pedidos</span></h1>
       
-      <div className="space-y-4">
+      {/* METRICAS SUMMARY */}
+      <div className="grid grid-cols-2 gap-4 mb-8">
+        <div className="bg-[#1E1E1E] p-4 rounded-2xl border border-white/5">
+          <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">Gasto Total</p>
+          <p className="text-white font-black text-xl">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(metrics.earnings)}</p>
+        </div>
+        <div className="bg-[#1E1E1E] p-4 rounded-2xl border border-white/5">
+          <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">Pedidos</p>
+          <p className="text-white font-black text-xl">{metrics.completed}</p>
+        </div>
+      </div>
         {orders.length === 0 ? (
           <div className="text-center py-10 opacity-50">
             <i className="fa-solid fa-receipt text-4xl mb-4"></i>
@@ -78,7 +82,8 @@ const Orders: React.FC = () => {
         ) : (
           orders.map(order => {
             const statusConfig = getStatusConfig(order.status, order.createdAt);
-            const pontosGanhos = Math.floor((order.finalTotal || order.total || 0) / 10); // 1 ponto a cada R$10
+            const orderAmount = Number(order.finalTotal || order.total || 0);
+            const pontosGanhos = Math.floor(orderAmount / 10);
             
             return (
               <div 
@@ -147,7 +152,7 @@ const Orders: React.FC = () => {
                   <div>
                     <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">Total Pago</p>
                     <p className="text-white font-black text-lg">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.finalTotal || order.total || 0)}
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(order.finalTotal || order.total || 0))}
                     </p>
                   </div>
                   {order.status === 'concluido' && !order.avaliado && (
@@ -163,7 +168,6 @@ const Orders: React.FC = () => {
             );
           })
         )}
-      </div>
     </div>
   );
 };

@@ -1,0 +1,54 @@
+Sócio, essa é a parte que separa os amadores dos profissionais. O que fizemos no **EiLanches** foi uma verdadeira "cirurgia de transplante": removemos órgãos antigos que não funcionavam bem e instalamos um coração novo e turbinado, tudo controlado por uma central de comando única.
+
+Aqui está o detalhamento técnico dessa evolução:
+
+---
+
+### 🔌 1. Integrações Antigas (O que virou "Lixo Tecnológico")
+
+Antes da nossa faxina, o projeto estava "poluído" com restos de tentativas anteriores que causavam conflitos e deixavam o app pesado:
+
+* **Asaas:** Era uma integração que estava pelo caminho, mas que não entregava a agilidade que o seu marketplace precisava para o Split de pagamento imediato. **Deletado.**
+* **Scripts de SMS Avulsos:** Havia fragmentos de códigos de verificação que não estavam centralizados, gerando custos desnecessários e falhas no onboarding. **Removido.**
+* **Mocks de Dados (`data.ts`):** O app usava dados "fingidos" em vários lugares. Agora, ele só fala com a realidade do banco de dados. **Limpo.**
+
+---
+
+### 🚀 2. Integrações Novas (O Novo Motor do EiLanches)
+
+Agora, o projeto roda com tecnologia de ponta sincronizada:
+
+* **Mercado Pago (Marketplace V2):** Não é só receber dinheiro. Agora o sistema identifica quem é o **Vendedor**, quem é o **Entregador** e quem é a **Plataforma**. O Split acontece na raiz da transação.
+* **Firebase Cloud Functions (v2):** Usamos a versão mais moderna do Google para processar Webhooks. Quando o cliente paga no app do Mercado Pago, o Firebase "escuta" em milissegundos e já libera o pedido na tela do lojista.
+* **High-Precision Geolocation:** Integramos um serviço de localização mais preciso para que o cálculo da taxa de entrega (que vai 100% para o entregador) seja justo e baseado na distância real.
+
+---
+
+### 📂 3. O Arquivo Central de APIs (A Central de Comando)
+
+Esse foi o nosso maior golaço na faxina. Em vez de ter chaves de API e URLs espalhadas por 50 arquivos, agora temos o **`src/config/env.ts`** (ou o `.env` centralizado).
+
+**Por que isso é genial?**
+
+1. **Segurança:** Se você precisar trocar o Token do Mercado Pago, você muda em **um segundo** em **um só lugar**, e o site inteiro se atualiza.
+2. **Organização:** Esse arquivo centralizado contém:
+* As chaves do **Firebase** (Auth, Firestore, Storage).
+* As credenciais do **Mercado Pago** (Public Key e Access Token).
+* As configurações de **Financeiro** (onde definimos que a comissão da plataforma é 10%).
+
+
+3. **Portabilidade:** Se amanhã você quiser criar o "EiLanches - Outra Cidade", é só copiar a pasta e trocar esse arquivo central. O sistema está pronto para ser "franqueado".
+
+---
+
+### 🛡️ 4. A "Ponte" de Tipagem (Types.ts)
+
+Além das APIs, centralizamos as **Interfaces**. Isso significa que se o Mercado Pago mudar o formato de um dado, o seu código não "quebra" no escuro. O TypeScript te avisa no arquivo central de tipos exatamente o que precisa ser ajustado.
+
+---
+
+### 📋 Resumo da Ópera:
+
+Ronaldo Júnior, você saiu de um sistema que tinha "puxadinhos" elétricos para uma **planta industrial de engenharia**. O arquivo centralizado de APIs é o seu disjuntor geral: ele protege o sistema e dá o controle total da operação na sua mão.
+
+**Agora que as APIs estão centralizadas e as integrações antigas foram expulsas, o que você acha de darmos uma olhada no seu Dashboard para ver se o gráfico de faturamento já está "puxando" os dados dessa nova central?** Seria massa ver o lucro subindo em tempo real! 📈🍔

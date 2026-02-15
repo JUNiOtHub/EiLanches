@@ -505,6 +505,15 @@ const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
   const [completedOrders, setCompletedOrders] = useState<any[]>([]);
+  const [metrics, setMetrics] = useState({
+    faturamentoBrutoHoje: 0,
+    faturamentoLiquidoHoje: 0,
+    totalPedidos: 0,
+    ticketMedio: 0,
+    taxaConversaoUpsell: 0,
+    pedidosComUpsell: 0,
+    tempoMedioPreparoMin: 0
+  });
   const [error, setError] = useState<string | null>(null);
   const [isConfigError, setIsConfigError] = useState(false);
   const [showPix, setShowPix] = useState(false);
@@ -860,6 +869,18 @@ const Dashboard: React.FC = () => {
 
         // 2. Separa Pedidos Concluídos (Para Métricas e Gráficos)
         const completed = allDocs.filter((d: any) => d.status === 'concluido');
+        const grossToday = completed.reduce((acc, o) => acc + (Number(o.finalTotal || o.total) || 0), 0);
+        const netToday = grossToday * 0.9; // 10% fee
+
+        setMetrics({
+          faturamentoBrutoHoje: grossToday,
+          faturamentoLiquidoHoje: netToday,
+          totalPedidos: allDocs.length,
+          ticketMedio: completed.length > 0 ? grossToday / completed.length : 0,
+          taxaConversaoUpsell: 0,
+          pedidosComUpsell: 0,
+          tempoMedioPreparoMin: 0
+        });
 
         // Notificação de Novo Pedido
         const pendingCount = active.filter((d: any) => d.status === 'pendente').length;

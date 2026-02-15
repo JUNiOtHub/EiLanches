@@ -4,46 +4,44 @@
  */
 
 import { db } from '../firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 
 const FORBIDDEN_KEYS = ['clienteDocumento', 'cpf', 'telefoneReal', 'documento', 'telefone'];
 const REQUIRED_MASKED = ['clienteDocumentoMasked', 'clienteTelefone'];
 
-function isString(value: unknown): value is string {
-  return typeof value === 'string';
-}
+export function subscribeToOrders(userId: string, userType: 'cliente' | 'loja' | 'entregador', callback: (orders: any[]) => void) {
+  const field = userType === 'cliente' ? 'clienteUid' : userType === 'loja' ? 'lojaId' : 'entregadorUid';
+  const q = query(
+    collection(db, 'pedidos'),
+    where(field, '==', userId)
+  );
 
-/**
- * Valida que o payload do pedido não contém dados sensíveis em claro
- * e que os campos mascarados existem e são string.
- */
-export function validateOrderPayload(data: Record<string, unknown>): void {
-  const keys = Object.keys(data);
-  const hasForbidden = keys.some(k => FORBIDDEN_KEYS.includes(k));
-  if (hasForbidden) {
-    throw new Error('Schema inválido: não é permitido gravar documento ou telefone em claro na coleção de pedidos.');
-  }
-  for (const key of REQUIRED_MASKED) {
-    if (!(key in data)) continue; // opcional em alguns fluxos legados
-    const val = data[key];
-    if (val !== undefined && !isString(val)) {
-      throw new Error(`Schema inválido: ${key} deve ser string (dado mascarado).`);
-    }
-  }
-}
-
-/**
- * Cria o documento do pedido no Firestore após validação.
- * Retorna o ID do documento criado.
- */
-export async function createOrderDocument(
-  payload: Record<string, unknown>
-): Promise<string> {
-  validateOrderPayload(payload);
-  const { createdAt: _ts, ...rest } = payload;
-  const docRef = await addDoc(collection(db, 'pedidos'), {
-    ...rest,
-    createdAt: serverTimestamp(),
+  return onSnapshot(q, (snapshot) => {
+    const orders = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    callback(orders);
   });
-  return docRef.id;
+}
+
+export function calculateMetrics(orders: any[]) {
+  const completed = orders.filter(o => o.status === 'concluido');
+  const canceled = orders.filter(o => o.status === 'cancelado');
+  
+  const totalGross = completed.reduce((acc, o) => acc + (Number(orderValue(o)) || 0), 0);
+  const totalNet = totalGross * 0.9; // 10% platform fee
+
+  return {
+    totalOrders: orders.length,
+    completedOrders: completed.length,
+    canceledOrders: canceled.length,
+    totalGross,
+    totalNet,
+    ticketMedio: completed.length > 0 ? totalGross / completed.length : 0
+  };
+}
+
+function orderValue(order: any) {
+  return order.finalTotal || order.total || 0;
 }

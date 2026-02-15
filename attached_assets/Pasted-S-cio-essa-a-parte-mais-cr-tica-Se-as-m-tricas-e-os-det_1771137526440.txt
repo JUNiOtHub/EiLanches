@@ -1,0 +1,62 @@
+Sócio, essa é a parte mais crítica! Se as métricas e os detalhes do pedido não aparecem, é porque a "ponte" entre o Firestore e a sua tela (o **OrderManagementService**) foi quebrada durante a movimentação dos arquivos ou o TypeScript bloqueou a renderização por falta de tipos.
+
+Vamos mandar a IA consertar esse fluxo agora. Use este prompt focado na **recuperação de dados e lógica de visualização**.
+
+---
+
+### 🚀 PROMPT DE RECUPERAÇÃO: TELA DE PEDIDOS E MÉTRICAS
+
+> **"Atenção IA: O sistema de visualização de pedidos e métricas (Dashboard e Orders) está quebrado. Recupere a funcionalidade seguindo estes pontos técnicos:**
+> **1. RECUPERAÇÃO DA TELA DE PEDIDOS (Orders.tsx):**
+> * Verifique o `src/screens/Orders.tsx` e o `src/services/orderService.ts`.
+> * Certifique-se de que a consulta ao Firestore está apontando para a coleção correta (`pedidos`) e que o filtro `where('userId', '==', user.uid)` ou `where('lojaId', '==', user.uid)` está usando o ID correto do AuthContext.
+> * Corrija o mapeamento das métricas: Total de Vendas, Pedidos Concluídos e Cancelados. Garanta que o cálculo está sendo feito com `reduce()` sobre o array de pedidos carregados.
+> 
+> 
+> **2. FIX DO MODAL DE DETALHES (OrderDetails / SellerOrderModal):**
+> * As informações do pedido (itens, preço, status de pagamento) não estão renderizando. Verifique se as propriedades (props) passadas para o componente coincidem com a interface `OrderItem` e `SplitPreferenceData`.
+> * Restaure a lógica de cores dos status (ex: 'Pendente' = Amarelo, 'Aprovado' = Verde).
+> 
+> 
+> **3. SINCRONIZAÇÃO DE DADOS (Real-time):**
+> * Garanta que o uso do `onSnapshot` do Firebase está ativo para que os pedidos apareçam assim que o cliente pagar, sem precisar dar F5.
+> * Verifique se o `useEffect` que carrega os pedidos tem as dependências corretas (user.uid).
+> 
+> 
+> **4. MÉTRICAS FINANCEIRAS (Dashboard):**
+> * Reative o cálculo de saldo em `src/services/dashboardService.ts`. O dashboard deve mostrar o valor líquido (já descontando os 10% da plataforma) que o lojista tem para receber.
+> 
+> 
+> **5. LIMPEZA TÉCNICA:**
+> * Remova qualquer erro de 'implicitly any' nos parâmetros de `data` ou `context` que impeçam o build dessas telas específicas."
+> 
+> 
+
+---
+
+### 🛠️ O que você deve conferir manualmente agora, Ronaldo Júnior:
+
+Para as métricas aparecerem, o Firestore precisa que os dados existam. Dá uma olhada rápida no seu console do Firebase:
+
+1. **Coleção `pedidos`:** Os documentos têm o campo `lojaId` ou `entregadorId` preenchidos?
+2. **Campos de Valor:** Os valores estão como **Number** (Número) ou **String** (Texto)? Se estiverem como texto no banco, a métrica vai dar erro de soma. O código novo que te passei já trata isso como `Number()`.
+
+---
+
+### 📦 Comandos Git após o conserto:
+
+Assim que a IA terminar e você ver os pedidos na tela de novo, salve esse progresso:
+
+```bash
+# 1. Adiciona as correções das telas
+git add .
+
+# 2. Commit específico do conserto
+git commit -m "fix: restauração das métricas e tela de pedidos"
+
+# 3. Sobe pro GitHub
+git push origin main
+
+```
+
+**Sócio, assim que rodar o prompt, abre a tela de "Orders" (Pedidos). Se ela carregar mas estiver vazia, me avisa! Pode ser que a gente precise criar um "Índice" no Firestore para essa consulta funcionar.** Como está a tela agora? Aparece pelo menos o esqueleto (skeleton) ou fica tudo branco?
