@@ -30,11 +30,9 @@ service cloud.firestore {
     // 1. Usuários (Perfis de Clientes, Lojistas e Entregadores)
     match /users/{userId} {
       // Leitura pública para permitir que clientes vejam lojas e cardápios
-      // Permitido ler qualquer documento individual e listar coleção
       allow read: if true;
 
-      // Escrita: apenas o próprio usuário, com limitação de campos
-      // Permitimos create para novos usuários se registrarem
+      // Escrita: apenas o próprio usuário
       allow create: if isAuthenticated() && request.auth.uid == userId;
       allow update: if isOwner(userId);
       allow delete: if false;
@@ -51,6 +49,11 @@ service cloud.firestore {
         allow read: if true;
         allow create, update, delete: if isOwner(userId);
       }
+
+      // Subcoleção: Favoritos (Clientes)
+      match /favorites/{itemId} {
+        allow read, write: if isOwner(userId);
+      }
     }
 
 
@@ -60,7 +63,7 @@ service cloud.firestore {
       // Criar: qualquer usuário logado pode criar um pedido
       allow create: if isAuthenticated();
 
-      // Ler: dono do pedido OU admin OU vendedor (lojaId == uid)
+      // Ler: dono do pedido OU admin OU vendedor (lojaId == uid) OU entregador vinculado
       allow read: if isAuthenticated() && (
         resource.data.clienteUid == request.auth.uid || 
         isAdmin() ||
@@ -68,12 +71,14 @@ service cloud.firestore {
         resource.data.entregadorUid == request.auth.uid
       );
 
-      // Atualizar: dono do pedido OU admin OU vendedor, com limitação de campos
+      // Atualizar: dono do pedido OU admin OU vendedor OU entregador
       allow update: if isAuthenticated() && (
         resource.data.clienteUid == request.auth.uid || 
         isAdmin() ||
         resource.data.lojaId == request.auth.uid ||
-        resource.data.entregadorUid == request.auth.uid
+        resource.data.entregadorUid == request.auth.uid ||
+        // Permite entregador aceitar (se o campo entregadorUid ainda não existir ou for null)
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'entregadorUid', 'entregadorNome', 'readyForPickup']))
       );
 
       // Deletar: Apenas o dono da loja pode deletar um pedido (ex: cancelados)

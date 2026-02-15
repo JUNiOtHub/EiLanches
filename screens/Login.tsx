@@ -20,6 +20,14 @@ const Login: React.FC = () => {
   const currentHostname = window.location.hostname;
 
   useEffect(() => {
+    // Detecção proativa de IP para avisar o desenvolvedor
+    const isIp = /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/.test(currentHostname);
+    if (isIp && currentHostname !== '127.0.0.1') {
+      setApiError({ type: 'domain', message: 'Acesso via IP detectado.' });
+    }
+  }, [currentHostname]);
+
+  useEffect(() => {
     const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement || document.createElement('link');
     link.type = 'image/svg+xml';
     link.rel = 'shortcut icon';
@@ -141,13 +149,13 @@ const Login: React.FC = () => {
       <div className="w-full max-w-md">
         
         {/* ERRO DE DOMÍNIO (ORANGE ALERT) */}
-        {apiError && apiError.type === 'domain' && (
+        {apiError && (apiError.type === 'domain' || apiError.message.includes('unauthorized-domain')) && (
           <div className="mb-8 bg-[#FF8C00] text-black p-8 rounded-[40px] shadow-[0_20px_50px_rgba(255,140,0,0.3)] animate-in slide-in-from-top duration-500">
             <div className="flex items-center space-x-3 mb-4">
               <i className="fa-solid fa-triangle-exclamation text-2xl"></i>
               <h4 className="font-black text-lg uppercase tracking-tighter">Ação Necessária!</h4>
             </div>
-            <p className="font-bold text-sm mb-6 leading-tight">Autorize este endereço no Firebase:</p>
+            <p className="font-bold text-sm mb-6 leading-tight">O Firebase bloqueou este IP/Domínio por segurança. Para corrigir:</p>
             <div className="bg-black/20 p-4 rounded-2xl mb-6 border border-black/10">
               <input 
                 readOnly 
@@ -158,7 +166,7 @@ const Login: React.FC = () => {
                 {copied ? 'COPIADO!' : 'COPIAR LINK'}
               </button>
             </div>
-            <a href={`https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/settings`} target="_blank" className="block w-full bg-white text-black text-center font-black py-4 rounded-2xl uppercase text-[10px] tracking-widest shadow-xl">Configurar Firebase</a>
+            <a href={`https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/settings`} target="_blank" className="block w-full bg-white text-black text-center font-black py-4 rounded-2xl uppercase text-[10px] tracking-widest shadow-xl">Ir para Console &gt; Auth &gt; Settings</a>
           </div>
         )}
 

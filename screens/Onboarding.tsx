@@ -93,6 +93,7 @@ const Onboarding: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [isCepLoading, setIsCepLoading] = useState(false);
   const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
+  const [showIpWarning, setShowIpWarning] = useState(false);
   const isProcessing = useRef(false);
 
   const [formData, setFormData] = useState({
@@ -110,6 +111,13 @@ const Onboarding: React.FC = () => {
   const [errors, setErrors] = useState<{[key: string]: string}>({});
 
   useEffect(() => {
+    // Verifica se está rodando em IP local (causa comum de erro CORS no Firebase)
+    const hostname = window.location.hostname;
+    const isIp = /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/.test(hostname);
+    if (isIp && hostname !== '127.0.0.1') {
+      setShowIpWarning(true);
+    }
+
     if (user?.uid) {
       const draftKey = `onboarding_draft_${user.uid}`;
       const savedDraft = localStorage.getItem(draftKey);
@@ -304,6 +312,18 @@ const Onboarding: React.FC = () => {
     <>
     {/* <TermsModal isOpen={isTermsModalOpen} onClose={() => setIsTermsModalOpen(false)} /> */}
     <div className="h-[100dvh] bg-[#0F0F0F] flex flex-col animate-in slide-in-from-right duration-500 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#1a1a1a] via-[#0F0F0F] to-[#0F0F0F]">
+      
+      {/* ALERTA DE CONFIGURAÇÃO FIREBASE (CORS) */}
+      {showIpWarning && (
+        <div className="bg-orange-600 text-white px-4 py-2 text-[10px] font-bold text-center animate-pulse">
+          <p>⚠️ Acesso via IP ({window.location.hostname}) detectado.</p>
+          <p className="opacity-80 font-normal">
+            Se tiver erro de conexão, adicione este IP em: <br/>
+            Firebase Console &gt; Authentication &gt; Settings &gt; Authorized Domains
+          </p>
+        </div>
+      )}
+
       <div className="shrink-0 p-6 md:px-12 pt-8">
         <button onClick={() => setStep(1)} className="text-gray-500 font-bold uppercase text-[10px] tracking-widest mb-6 flex items-center hover:text-white transition-colors">
           <i className="fa-solid fa-arrow-left-long mr-3"></i> Alterar Perfil

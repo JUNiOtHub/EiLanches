@@ -1,48 +1,86 @@
-# 🚨 Implantar Regras do Firebase Firestore
+# 🚨 Configuração de Segurança do Firebase (Firestore Rules)
 
-## Problema Corrigido
-As regras do Firestore foram atualizadas para permitir que vendedores acessem seus próprios pedidos através do campo `lojaId`.
+Para corrigir o erro `Missing or insufficient permissions` ao adicionar ao carrinho, favoritar itens ou criar pedidos, você precisa atualizar as regras de segurança no Console do Firebase.
 
-## Como Implantar as Regras
+## 📜 Regras Completas (Copie e Cole)
 
-### Opção 1: Firebase Console (Recomendado)
-1. Abra o [Firebase Console](https://console.firebase.google.com/)
-2. Selecione seu projeto: `offline-f2c69`
-3. Vá para **Firestore Database** → **Rules**
-4. Substitua todo o conteúdo das regras pelo arquivo `firestore.rules`
-5. Clique em **Publish**
+Vá em **Firestore Database** > **Rules** e substitua tudo por isso:
 
-### Opção 2: Firebase CLI (Avançado)
-```bash
-# 1. Instalar Firebase CLI
-npm install -g firebase-tools
-
-# 2. Login no Firebase
-firebase login
-
-# 3. Navegar até o projeto
-cd "e:/backup/eilanches---delivery-premium (1)"
-
-# 4. Implantar regras
-firebase deploy --only firestore:rules
-```
-
-## O que foi alterado?
-
-### ANTES (muito restritivo):
 ```javascript
-// Ler: apenas dono do pedido OU admin
-allow read: if isAuthenticated() && (resource.data.clienteUid == request.auth.uid || isAdmin());
-```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Função auxiliar para verificar se está logado
+    function isAuthenticated() {
+      return request.auth != null;
+    }
 
-### DEPOIS (permitido para vendedores):
-```javascript
-// Ler: dono do pedido OU admin OU vendedor (lojaId == uid)
-allow read: if isAuthenticated() && (
-  resource.data.clienteUid == request.auth.uid || 
-  isAdmin() ||
-  resource.data.lojaId == request.auth.uid
-);
+    // Função para verificar se é o dono do documento
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // 1. USUÁRIOS (Perfil)
+    // Cada um lê e edita o seu. Vendedores/Entregadores também.
+    match /users/{userId} {
+      allow read: if true; // Necessário para ler dados da loja (cardápio)
+      allow write: if isOwner(userId);
+      
+      // Subcoleção: CARDÁPIO (Lojas)
+      match /cardapio/{itemId} {
+        allow read: if true; // Público para clientes verem
+        allow write: if isOwner(userId); // Só a loja edita
+      }
+      
+      // Subcoleção: CUPONS
+      match /coupons/{couponId} {
+        allow read: if true;
+        allow write: if isOwner(userId);
+      }
+      
+      // Subcoleção: FAVORITOS (Clientes)
+      match /favorites/{itemId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    // 2. PEDIDOS
+    // Cliente cria. Loja e Entregador leem/atualizam se estiverem envolvidos.
+    match /pedidos/{orderId} {
+      allow create: if isAuthenticated();
+      allow read: if isAuthenticated() && (
+        resource.data.clienteUid == request.auth.uid || 
+        resource.data.lojaId == request.auth.uid || 
+        resource.data.entregadorUid == request.auth.uid
+      );
+      allow update: if isAuthenticated() && (
+        resource.data.clienteUid == request.auth.uid || 
+        resource.data.lojaId == request.auth.uid || 
+        resource.data.entregadorUid == request.auth.uid ||
+        // Permite entregador aceitar (se o campo entregadorUid ainda não existir ou for null)
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'entregadorUid', 'entregadorNome']))
+      );
+    }
+    
+    // 3. AVALIAÇÕES
+    match /avaliacoes/{reviewId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+    }
+
+    // 4. CARTEIRAS E SAQUES (Financeiro)
+    match /wallets/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if false; // Somente via Cloud Functions (backend)
+    }
+    
+    match /saques/{saqueId} {
+      allow create: if isAuthenticated();
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+  }
+}
 ```
 
 ## Resultado Esperado

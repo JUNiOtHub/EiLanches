@@ -101,10 +101,10 @@ const Profile: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#070707] text-white p-6 pb-32">
-      <div className="flex items-start justify-between gap-4 mb-6">
+    <div className="min-h-screen bg-[#0a0a0a] text-white p-6 pb-32 md:pb-10 md:pt-6 md:max-w-7xl md:mx-auto">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 mb-8">
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#FF8C00] to-[#FF4500] flex items-center justify-center shadow-[0_0_30px_rgba(255,140,0,0.25)] border border-white/10">
+          <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-[#FF8C00] to-[#FF4500] flex items-center justify-center shadow-[0_0_30px_rgba(255,140,0,0.25)] border-4 border-[#181818]">
             <i className="fa-solid fa-user text-2xl"></i>
           </div>
           <div>
@@ -115,7 +115,7 @@ const Profile: React.FC = () => {
         </div>
         <button
           onClick={() => navigate('/rewards')}
-          className="px-4 py-3 rounded-2xl bg-white/5 border border-white/10 hover:border-[#FF8C00]/40 hover:bg-[#FF8C00]/10 transition-all"
+          className="w-full md:w-auto px-6 py-4 rounded-2xl bg-[#181818] border border-white/10 hover:border-[#FF8C00]/40 hover:bg-[#FF8C00]/10 transition-all flex items-center justify-between md:justify-center gap-4"
         >
           <div className="text-[9px] font-black uppercase tracking-widest text-gray-400">Fidelidade</div>
           <div className="flex items-center gap-2">
@@ -125,7 +125,7 @@ const Profile: React.FC = () => {
         </button>
       </div>
 
-      <div className="bg-[#111] border border-white/10 rounded-[28px] p-5 mb-6 shadow-[0_20px_80px_rgba(0,0,0,0.6)]">
+      <div className="bg-[#181818] border border-white/10 rounded-2xl p-6 mb-8 shadow-lg">
         <div className="flex items-center justify-between mb-3">
           <div className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">Progresso</div>
           <div className="text-[10px] font-black uppercase tracking-[0.3em] text-[#00F5FF]">{loyaltyPct}%</div>
@@ -141,13 +141,12 @@ const Profile: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6">
-        <div className="bg-[#111] border border-white/10 rounded-[28px] p-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-[#181818] border border-white/10 rounded-2xl p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">Meus Dados</div>
             <div className="text-[10px] font-black uppercase tracking-[0.3em] text-[#FF8C00]">Premium</div>
           </div>
-
           <div className="space-y-3">
             <input
               value={nome}
@@ -178,14 +177,14 @@ const Profile: React.FC = () => {
           </button>
         </div>
 
-        <div className="bg-[#111] border border-white/10 rounded-[28px] p-6">
+        <div className="bg-[#181818] border border-white/10 rounded-2xl p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">Endereços Salvos</div>
             <button
               onClick={() => toast('Em breve')}
               className="px-3 py-2 rounded-xl bg-[#FF8C00]/10 border border-[#FF8C00]/30 text-[#FF8C00] hover:bg-[#FF8C00]/20 transition-all"
             >
-              <i className="fa-solid fa-plus"></i>
+              <i className="fa-solid fa-plus text-xs"></i>
             </button>
           </div>
 
@@ -216,7 +215,7 @@ const Profile: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-[#111] border border-white/10 rounded-[28px] p-6">
+        <div className="bg-[#181818] border border-white/10 rounded-2xl p-6 lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <div className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">Histórico de Pedidos</div>
           </div>
@@ -224,7 +223,7 @@ const Profile: React.FC = () => {
           <div className="space-y-3">
             {orders.map((o) => (
               <div key={o.id} className="p-4 rounded-2xl bg-black/40 border border-white/10">
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex justify-between items-center">
                   <div>
                     <div className="font-black">{o.shopName}</div>
                     <div className="text-xs text-gray-500">{o.dateLabel} • #{o.id}</div>
@@ -245,7 +244,7 @@ const Profile: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-[#111] border border-white/10 rounded-[28px] p-6">
+        <div className="bg-[#181818] border border-white/10 rounded-2xl p-6 lg:col-span-2">
           <div className="flex items-center justify-between">
             <div className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">Segurança</div>
           </div>
@@ -253,7 +252,7 @@ const Profile: React.FC = () => {
             onClick={() => signOut()}
             className="mt-4 w-full py-4 rounded-2xl font-black uppercase tracking-[0.25em] text-[11px] bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 hover:border-red-500/60 transition-all"
           >
-            Sair
+            Sair da Conta
           </button>
         </div>
       </div>

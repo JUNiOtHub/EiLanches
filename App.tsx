@@ -3,7 +3,8 @@ import { HashRouter as Router, Routes, Route, Link, Navigate, useLocation } from
 import { Toaster } from 'react-hot-toast';
 import { CartProvider, useCart } from './context/CartContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { useProtectedRoutes } from './src/hooks/useProtectedRoutes';
+import { useAuthRouter } from './src/hooks/useAuthRouter';
+import SplashScreen from './components/layout/SplashScreen';
 
 // Import Screens
 import Home from './screens/Home';
@@ -59,45 +60,43 @@ const Header: React.FC<{ cartCount: number; isActive: (path: string) => boolean 
 
 // --- Main Content & Router Logic ---
 const MainContent: React.FC = () => {
-  const { loading } = useAuth();
-  const { 
-    isAuthenticated, 
-    isProfileComplete, 
-    userType, 
-    isLoading, 
-    checkRedirect,
-  } = useProtectedRoutes();
+  const authState = useAuthRouter();
   const { items } = useCart();
   const location = useLocation();
   
   const [showSplash, setShowSplash] = useState(true);
   
   const cartCount = items.reduce((acc, i) => acc + i.quantity, 0);
-  
   const isActive = (path: string) => location.pathname === path;
 
+  // Controle da Splash Screen
   useEffect(() => {
-    if (!loading) {
-      const timer = setTimeout(() => setShowSplash(false), 800);
+    if (authState !== 'LOADING') {
+      // Pequeno delay para a animação de saída suave
+      const timer = setTimeout(() => setShowSplash(false), 1200);
       return () => clearTimeout(timer);
     }
-  }, [loading]);
+  }, [authState]);
 
-  if (showSplash || isLoading) {
-    return <div className="min-h-screen bg-[#141414] flex items-center justify-center">
-      <div className="text-white text-2xl font-bold">🍔 EiLanches</div>
-    </div>;
+  // Renderiza Splash enquanto carrega ou enquanto a animação não termina
+  if (showSplash || authState === 'LOADING') {
+    return <SplashScreen isFadingOut={!showSplash && authState !== 'LOADING'} />;
   }
   
-  if (checkRedirect?.shouldRedirect && checkRedirect.to) {
-    return <Navigate to={checkRedirect.to} replace />;
+  // --- Roteamento Baseado em Estado ---
+
+  // 1. Não Autenticado -> Login
+  if (authState === 'UNAUTHENTICATED') {
+    return <Login />;
   }
 
-  if (!isAuthenticated) return <Login />;
-  if (!isProfileComplete) return <Onboarding />;
+  // 2. Perfil Incompleto -> Onboarding
+  if (authState === 'ONBOARDING') {
+    return <Onboarding />;
+  }
 
-  // --- User-specific Routes ---
-  if (userType === 'vendedor') {
+  // 3. Vendedor -> Dashboard Admin
+  if (authState === 'VENDOR') {
     return (
       <Routes>
         <Route path="/admin" element={<Dashboard />} />
@@ -108,7 +107,8 @@ const MainContent: React.FC = () => {
     );
   }
 
-  if (userType === 'entregador') {
+  // 4. Entregador -> Dashboard Delivery
+  if (authState === 'DRIVER') {
     return (
       <Routes>
         <Route path="/delivery" element={<DeliveryDashboard />} />
@@ -119,11 +119,11 @@ const MainContent: React.FC = () => {
     );
   }
 
-  // --- Customer Routes ---
+  // 5. Cliente -> App Padrão
   return (
     <div className="w-full min-h-screen bg-[#0F0F0F] relative flex flex-col">
-      <Header cartCount={cartCount} isActive={isActive} />
-      <main className="flex-1 pb-20 md:pb-0">
+      {location.pathname !== '/' && <Header cartCount={cartCount} isActive={isActive} />}
+      <main className={`flex-1 ${location.pathname !== '/' ? 'pb-20 md:pb-0' : ''}`}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/shop/:id" element={<Menu />} />
@@ -137,32 +137,33 @@ const MainContent: React.FC = () => {
       </main>
       
       {/* Bottom Navigation - Mobile Only */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[#141414]/95 backdrop-blur-lg border-t border-white/5 z-[100]">
-        <div className="flex justify-around items-center py-2">
-          <Link to="/" className={`flex flex-col items-center p-2 rounded-lg transition-colors ${isActive('/') ? 'text-[#FF8C00]' : 'text-gray-500 hover:text-white'}`}>
-            <i className="fa-solid fa-home text-lg mb-1"></i>
-            <span className="text-[10px] font-medium">Início</span>
-          </Link>
-          <Link to="/orders" className={`flex flex-col items-center p-2 rounded-lg transition-colors relative ${isActive('/orders') ? 'text-[#FF8C00]' : 'text-gray-500 hover:text-white'}`}>
-            <i className="fa-solid fa-receipt text-lg mb-1"></i>
-            <span className="text-[10px] font-medium">Pedidos</span>
-            {/* Badge de notificação - pode ser adicionado depois */}
-          </Link>
-          <Link to="/cart" className={`flex flex-col items-center p-2 rounded-lg transition-colors relative ${isActive('/cart') ? 'text-[#FF8C00]' : 'text-gray-500 hover:text-white'}`}>
-            <i className="fa-solid fa-bag-shopping text-lg mb-1"></i>
-            <span className="text-[10px] font-medium">Carrinho</span>
-            {cartCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-[#FF8C00] text-white text-[8px] w-4 h-4 rounded-full flex items-center justify-center font-black">
-                {cartCount}
-              </span>
-            )}
-          </Link>
-          <Link to="/profile" className={`flex flex-col items-center p-2 rounded-lg transition-colors ${isActive('/profile') ? 'text-[#FF8C00]' : 'text-gray-500 hover:text-white'}`}>
-            <i className="fa-solid fa-user text-lg mb-1"></i>
-            <span className="text-[10px] font-medium">Perfil</span>
-          </Link>
+      {location.pathname !== '/' && (
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[#141414]/95 backdrop-blur-lg border-t border-white/5 z-[100]">
+          <div className="flex justify-around items-center py-2">
+            <Link to="/" className={`flex flex-col items-center p-2 rounded-lg transition-colors ${isActive('/') ? 'text-[#FF8C00]' : 'text-gray-500 hover:text-white'}`}>
+              <i className="fa-solid fa-home text-lg mb-1"></i>
+              <span className="text-[10px] font-medium">Início</span>
+            </Link>
+            <Link to="/orders" className={`flex flex-col items-center p-2 rounded-lg transition-colors relative ${isActive('/orders') ? 'text-[#FF8C00]' : 'text-gray-500 hover:text-white'}`}>
+              <i className="fa-solid fa-receipt text-lg mb-1"></i>
+              <span className="text-[10px] font-medium">Pedidos</span>
+            </Link>
+            <Link to="/cart" className={`flex flex-col items-center p-2 rounded-lg transition-colors relative ${isActive('/cart') ? 'text-[#FF8C00]' : 'text-gray-500 hover:text-white'}`}>
+              <i className="fa-solid fa-bag-shopping text-lg mb-1"></i>
+              <span className="text-[10px] font-medium">Carrinho</span>
+              {cartCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-[#FF8C00] text-white text-[8px] w-4 h-4 rounded-full flex items-center justify-center font-black">
+                  {cartCount}
+                </span>
+              )}
+            </Link>
+            <Link to="/profile" className={`flex flex-col items-center p-2 rounded-lg transition-colors ${isActive('/profile') ? 'text-[#FF8C00]' : 'text-gray-500 hover:text-white'}`}>
+              <i className="fa-solid fa-user text-lg mb-1"></i>
+              <span className="text-[10px] font-medium">Perfil</span>
+            </Link>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

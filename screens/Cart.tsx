@@ -318,7 +318,13 @@ const Cart: React.FC = () => {
         createdAt: serverTimestamp()
       };
 
-      const novoPedidoId = await createOrderDocument(pedidoData as Record<string, unknown>);
+      const creationResult = await createOrderDocument(pedidoData as Record<string, unknown>);
+
+      if (!creationResult.success) {
+        throw new Error("Falha ao registrar o pedido. Tente novamente.");
+      }
+
+      const novoPedidoId = creationResult.orderId;
 
       // Crédito na carteira do lojista (saldo pendente) é feito pela Cloud Function onOrderCreatedCreditWallet ao criar o pedido
 

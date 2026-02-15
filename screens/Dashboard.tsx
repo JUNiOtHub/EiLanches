@@ -18,7 +18,7 @@ import { Bar, Line } from 'react-chartjs-2';
 import { db, collection, onSnapshot, query, where, orderBy, updateDoc, doc, firebaseConfig, addDoc, deleteDoc, getDocs, writeBatch, serverTimestamp, getDoc } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 // import { asaasService } from '@/services/asaas'; // Removido - migramos para Mercado Pago
-// import ConfirmationModal from '../components/common/ConfirmationModal'; // Temporariamente desativado
+import ConfirmationModal from '../components/ConfirmationModal';
 // import SellerOrderModal from '../components/dashboard/SellerOrderModal'; // Temporariamente desativado
 import { ENV } from '../config/env';
 import { getStatusConfig } from '../utils/statusConfig';
@@ -576,7 +576,7 @@ const Dashboard: React.FC = () => {
   // Estado para Modais de Confirmação
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
-    type: 'deleteItem' | 'deleteCoupon' | null;
+    type: 'deleteItem' | 'deleteCoupon' | 'deleteOrder' | null;
     id: string | null; // Pode ser ID do item, cupom ou pedido
   }>({ isOpen: false, type: null, id: null });
 
@@ -1108,7 +1108,11 @@ const Dashboard: React.FC = () => {
   const uploadToImgBB = async (file: Blob) => {
     const formData = new FormData();
     formData.append("image", file);
-    const apiKey = ENV.IMGBB.key || '4f069942c132182449dea4cf00814506';
+    const apiKey = ENV.IMGBB.key;
+
+    if (!apiKey || apiKey === 'your_imgbb_key') {
+      throw new Error("Chave de API do ImgBB inválida. Configure VITE_IMGBB_KEY no arquivo .env");
+    }
     
     const response = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
       method: "POST",
@@ -1230,7 +1234,7 @@ const Dashboard: React.FC = () => {
       const formData = new FormData();
       formData.append("image", url);
       
-      const apiKey = ENV.IMGBB.key || '4f069942c132182449dea4cf00814506';
+      const apiKey = ENV.IMGBB.key;
 
       const response = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
         method: "POST",
@@ -2392,7 +2396,7 @@ const Dashboard: React.FC = () => {
       )}
 
       {/* MODAL DE CONFIRMAÇÃO GENÉRICO */}
-      {/* <ConfirmationModal
+      <ConfirmationModal
         isOpen={confirmModal.isOpen}
         onClose={() => setConfirmModal({ isOpen: false, type: null, id: null })}
         onConfirm={() => {
@@ -2403,8 +2407,8 @@ const Dashboard: React.FC = () => {
         title={confirmModal.type === 'deleteItem' ? "Excluir Produto?" : confirmModal.type === 'deleteCoupon' ? "Excluir Cupom?" : "Excluir Pedido?"}
         message={confirmModal.type === 'deleteItem' ? "Esta ação removerá o item do seu cardápio permanentemente. Tem certeza?" : confirmModal.type === 'deleteCoupon' ? "O cupom deixará de funcionar imediatamente para novos pedidos." : "Tem certeza que deseja excluir este pedido permanentemente? Esta ação não pode ser desfeita."}
         cancelText="Cancelar"
-        type="danger"
-      /> */}
+        variant="danger"
+      />
 
       {/* MODAL DE DETALHES DO PEDIDO (CONTROLE REMOTO) */}
       {/* <SellerOrderModal
