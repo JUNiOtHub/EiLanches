@@ -1,0 +1,453 @@
+/* Estilos para o mapa de entrega - EiLanches */
+
+/* Container principal */
+.delivery-map-container {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  background: #0F0F0F;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Painel de informações */
+.map-info-panel {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  right: 20px;
+  z-index: 1000;
+  background: rgba(30, 30, 30, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 140, 0, 0.3);
+  border-radius: 16px;
+  padding: 16px;
+  color: white;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* Status de localização */
+.location-status {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-icon {
+  font-size: 20px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 140, 0, 0.2);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 140, 0, 0.3);
+}
+
+.status-label {
+  font-size: 12px;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+
+.status-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.rural-indicator {
+  color: #FF8C00;
+  font-size: 12px;
+  margin-left: 8px;
+  padding: 2px 6px;
+  background: rgba(255, 140, 0, 0.2);
+  border-radius: 4px;
+  border: 1px solid rgba(255, 140, 0, 0.3);
+}
+
+/* Informações da rota */
+.route-info-panel {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.route-info-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.route-icon {
+  font-size: 18px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.route-label {
+  font-size: 11px;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+
+.route-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.route-value.earnings {
+  color: #4ade80;
+  text-shadow: 0 0 10px rgba(74, 222, 128, 0.5);
+}
+
+/* Wrapper do mapa */
+.map-wrapper {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Estilos do Leaflet */
+.delivery-map {
+  background: #0F0F0F !important;
+}
+
+.delivery-map .leaflet-container {
+  background: #0F0F0F !important;
+}
+
+.delivery-map .leaflet-control-container {
+  display: none !important;
+}
+
+/* Marcadores personalizados */
+.delivery-marker {
+  filter: drop-shadow(0 0 10px rgba(255, 140, 0, 0.8));
+  animation: pulse-marker 2s infinite;
+}
+
+.customer-marker {
+  filter: drop-shadow(0 0 10px rgba(255, 255, 0, 0.8));
+  animation: pulse-marker 2s infinite;
+}
+
+@keyframes pulse-marker {
+  0% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 10px rgba(255, 140, 0, 0.8));
+  }
+  50% {
+    transform: scale(1.1);
+    filter: drop-shadow(0 0 20px rgba(255, 140, 0, 1));
+  }
+  100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 10px rgba(255, 140, 0, 0.8));
+  }
+}
+
+/* Popup dos marcadores */
+.marker-popup {
+  background: #1E1E1E;
+  border: 1px solid rgba(255, 140, 0, 0.3);
+  border-radius: 8px;
+  padding: 12px;
+  color: white;
+  font-size: 14px;
+}
+
+.marker-popup h4 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #FF8C00;
+}
+
+.marker-popup p {
+  margin: 4px 0;
+  font-size: 12px;
+  color: #ccc;
+}
+
+.rural-warning {
+  color: #FF8C00;
+  font-weight: 600;
+  margin-top: 8px;
+  padding: 4px 8px;
+  background: rgba(255, 140, 0, 0.2);
+  border-radius: 4px;
+  border: 1px solid rgba(255, 140, 0, 0.3);
+}
+
+.delivery-status {
+  color: #4ade80;
+  font-weight: 600;
+  margin-top: 8px;
+}
+
+/* Linha da rota */
+.route-line {
+  animation: dash-animation 20s linear infinite;
+}
+
+@keyframes dash-animation {
+  to {
+    stroke-dashoffset: -30;
+  }
+}
+
+/* Controles personalizados */
+.leaflet-custom-controls {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.map-control-btn {
+  width: 48px;
+  height: 48px;
+  background: rgba(30, 30, 30, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 140, 0, 0.3);
+  border-radius: 12px;
+  color: white;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.map-control-btn:hover {
+  background: rgba(255, 140, 0, 0.2);
+  border-color: rgba(255, 140, 0, 0.5);
+  transform: scale(1.05);
+}
+
+.map-control-btn:active {
+  transform: scale(0.95);
+}
+
+/* Loading state */
+.map-loading {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #0F0F0F;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255, 140, 0, 0.2);
+  border-top: 3px solid #FF8C00;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 20px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.map-loading p {
+  color: white;
+  font-size: 16px;
+  margin: 8px 0;
+  text-align: center;
+}
+
+.loading-hint {
+  color: #999;
+  font-size: 14px;
+  margin-top: 8px;
+}
+
+/* Indicador de entrega */
+.delivery-indicator {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 1001;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(74, 222, 128, 0.2);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  border-radius: 20px;
+  color: #4ade80;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.pulse-ring {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #4ade80;
+  border-radius: 50%;
+  animation: pulse-ring 1.5s ease-out infinite;
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+/* Botão de emergência */
+.emergency-button {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  z-index: 1000;
+}
+
+.emergency-btn {
+  padding: 12px 20px;
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 12px;
+  color: #f87171;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.emergency-btn:hover {
+  background: rgba(239, 68, 68, 0.3);
+  border-color: rgba(239, 68, 68, 0.5);
+  transform: scale(1.05);
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+  .map-info-panel {
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    padding: 12px;
+  }
+  
+  .route-info-panel {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  
+  .delivery-indicator {
+    top: auto;
+    bottom: 80px;
+    right: 10px;
+  }
+  
+  .emergency-button {
+    bottom: 10px;
+    left: 10px;
+  }
+  
+  .leaflet-custom-controls {
+    bottom: 80px;
+    right: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .map-info-panel {
+    top: 5px;
+    left: 5px;
+    right: 5px;
+    padding: 8px;
+  }
+  
+  .status-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  
+  .route-info-item {
+    padding: 8px;
+  }
+  
+  .route-value {
+    font-size: 14px;
+  }
+}
+
+/* Safe areas para mobile */
+@media (max-height: 600px) {
+  .map-info-panel {
+    position: relative;
+    top: auto;
+    margin: 10px;
+  }
+  
+  .delivery-map-container {
+    height: 100vh;
+  }
+}
+
+/* Animações suaves */
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Otimizações de performance */
+.delivery-map {
+  will-change: transform;
+  contain: layout style paint;
+}
+
+.leaflet-marker-icon {
+  will-change: transform;
+}
+
+.leaflet-overlay-pane {
+  will-change: transform;
+}

@@ -1,0 +1,25 @@
+{
+  "name": "eilanches-functions",
+  "description": "Cloud Functions do EiLanches (pontos de fidelidade e outros)",
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "shell": "npm run build && firebase functions:shell",
+    "deploy": "firebase deploy --only functions"
+  },
+  "engines": {
+    "node": "18"
+  },
+  "dependencies": {
+    "@types/node": "^25.2.3",
+    "firebase-admin": "^13.6.1",
+    "firebase-functions": "^7.0.5",
+    "mercadopago": "^1.5.17"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "private": true
+}

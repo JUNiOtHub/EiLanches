@@ -1,0 +1,72 @@
+/* Scrollbar personalizado para o tema dark do EiLanches */
+
+/* Scrollbar horizontal para carrosseis */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari and Opera */
+}
+
+/* Scrollbar personalizado para lists */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #FF8C00 #1E1E1E;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #1E1E1E;
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #FF8C00;
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #FFB84D;
+}
+
+/* Scrollbar para modal e dropdowns */
+.modal-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #666 #2A2A2A;
+}
+
+.modal-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.modal-scrollbar::-webkit-scrollbar-track {
+  background: #2A2A2A;
+  border-radius: 4px;
+}
+
+.modal-scrollbar::-webkit-scrollbar-thumb {
+  background: #666;
+  border-radius: 4px;
+}
+
+.modal-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #888;
+}
+
+/* Animações suaves de scroll */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Para dispositivos móveis - melhorar a experiência de touch scroll */
+@media (max-width: 768px) {
+  .custom-scrollbar {
+    -webkit-overflow-scrolling: touch;
+  }
+}

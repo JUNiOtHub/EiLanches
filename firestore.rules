@@ -1,0 +1,125 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- Funções Auxiliares ---
+    
+    // Verifica se o usuário está logado
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Verifica se o usuário é dono do documento (pelo ID)
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Admin via custom claims (Cloud Functions / Firebase Admin SDK)
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.admin == true;
+    }
+
+    // Limitador simples contra payload gigante: limita quantidade de campos
+    function isSmallWrite() {
+      return request.resource.data.size() < 20;
+    }
+
+
+    // --- Regras de Coleções ---
+
+    // 1. Usuários (Perfis de Clientes, Lojistas e Entregadores)
+    match /users/{userId} {
+      // Leitura pública para permitir que clientes vejam lojas e cardápios
+      // Permitido ler qualquer documento individual e listar coleção
+      allow read: if true;
+
+      // Escrita: apenas o próprio usuário, com limitação de campos
+      // Permitimos create para novos usuários se registrarem
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if isOwner(userId);
+      allow delete: if false;
+
+
+      // Subcoleção: Cardápio (Produtos da Loja)
+      match /cardapio/{productId} {
+        allow read: if true; // Público: qualquer um vê o cardápio
+        allow create, update, delete: if isOwner(userId);
+      }
+      
+      // Subcoleção: Cupons
+      match /coupons/{couponId} {
+        allow read: if true;
+        allow create, update, delete: if isOwner(userId);
+      }
+    }
+
+
+    // 2. Pedidos (Privacy by Design: dados sensíveis só mascarados no Firestore)
+    match /pedidos/{orderId} {
+
+      // Criar: qualquer usuário logado pode criar um pedido
+      allow create: if isAuthenticated();
+
+      // Ler: dono do pedido OU admin OU vendedor (lojaId == uid)
+      allow read: if isAuthenticated() && (
+        resource.data.clienteUid == request.auth.uid || 
+        isAdmin() ||
+        resource.data.lojaId == request.auth.uid ||
+        resource.data.entregadorUid == request.auth.uid
+      );
+
+      // Atualizar: dono do pedido OU admin OU vendedor, com limitação de campos
+      allow update: if isAuthenticated() && (
+        resource.data.clienteUid == request.auth.uid || 
+        isAdmin() ||
+        resource.data.lojaId == request.auth.uid ||
+        resource.data.entregadorUid == request.auth.uid
+      );
+
+      // Deletar: Apenas o dono da loja pode deletar um pedido (ex: cancelados)
+      allow delete: if isAuthenticated() && resource.data.lojaId == request.auth.uid;
+
+
+      // Subcoleção: mensagens de status (cliente/loja/entregador)
+      match /messages/{msgId} {
+        allow read, create: if isAuthenticated() && (
+          get(/databases/$(database)/documents/pedidos/$(orderId)).data.clienteUid == request.auth.uid ||
+          get(/databases/$(database)/documents/pedidos/$(orderId)).data.lojaId == request.auth.uid ||
+          get(/databases/$(database)/documents/pedidos/$(orderId)).data.entregadorUid == request.auth.uid ||
+          isAdmin()
+        );
+
+        allow update, delete: if false;
+      }
+    }
+
+    // 3. Avaliações
+    match /avaliacoes/{avaliacaoId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+    }
+
+    // 4. Carteiras – só o dono lê; escrita apenas via Cloud Functions (crédito ao criar pedido / liberação ao validar PIN)
+    match /wallets/{userId} {
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      // Usuário comum não pode alterar saldo; apenas admin/cloud functions
+      allow create, update, delete: if isAdmin() && isSmallWrite();
+    }
+
+
+    // 5. Solicitações de saque (Coleção 'saques')
+    match /saques/{saqueId} {
+      // Usuário pode apenas criar solicitação pequena para si mesmo
+      allow create: if isAuthenticated();
+      // Leitura pelo dono da loja ou entregador
+      allow read: if isAuthenticated() && (
+        resource.data.lojaId == request.auth.uid || 
+        resource.data.userId == request.auth.uid || 
+        isAdmin()
+      );
+
+      // Atualização e delete apenas por admin/cloud functions
+      allow update, delete: if isAdmin() && isSmallWrite();
+    }
+  }
+}

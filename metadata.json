@@ -1,0 +1,8 @@
+{
+  "name": "EiLanches - Delivery Premium",
+  "description": "Um aplicativo premium de delivery para o seu povoado, focado em performance e experiência do usuário com integração direta ao WhatsApp.",
+  "requestFramePermissions": [
+    "geolocation"
+
+  ]
+}

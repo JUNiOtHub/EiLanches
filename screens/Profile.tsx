@@ -1,0 +1,264 @@
+
+import React, { useMemo, useState } from 'react';
+import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { db, doc, updateDoc } from '../firebase';
+import { useHighPrecisionGeolocation } from '../services/highPrecisionGeolocation';
+
+type SavedAddress = {
+  id: string;
+  label: string;
+  address: string;
+  isDefault?: boolean;
+};
+
+type OrderHistoryItem = {
+  id: string;
+  shopName: string;
+  total: number;
+  dateLabel: string;
+  itemsPreview: string;
+};
+
+const Profile: React.FC = () => {
+  const { profile, signOut, refreshProfile } = useAuth();
+  const navigate = useNavigate();
+
+  const { location } = useHighPrecisionGeolocation({
+    enableHighAccuracy: true,
+    timeout: 10000,
+    maximumAge: 60000
+  });
+
+  const [loading, setLoading] = useState(false);
+  const [nome, setNome] = useState(profile?.nome || '');
+  const [telefone, setTelefone] = useState(profile?.telefone || '');
+  const [documento, setDocumento] = useState(profile?.documento || '');
+  const [enderecoPrincipal, setEnderecoPrincipal] = useState(profile?.endereco || '');
+
+  const loyaltyPoints = Number((profile as any)?.loyaltyPoints || 0);
+  const loyaltyGoal = 1000;
+  const loyaltyPct = Math.min(100, Math.round((loyaltyPoints / loyaltyGoal) * 100));
+
+  const cityHint = useMemo(() => {
+    if (!location) return 'Localização: verificando…';
+
+    const { latitude, longitude } = location;
+
+    // Heurística simples para display (não é geocoding). Ajuste depois com reverse geocode em backend.
+    // Itiúba/BA (aprox) / Jaguaquara/BA (aprox)
+    const itiuba = { lat: -10.694, lng: -39.845 };
+    const jaguaquara = { lat: -13.531, lng: -39.964 };
+
+    const d1 = Math.hypot(latitude - itiuba.lat, longitude - itiuba.lng);
+    const d2 = Math.hypot(latitude - jaguaquara.lat, longitude - jaguaquara.lng);
+
+    if (Math.min(d1, d2) < 0.35) return d1 < d2 ? 'Localização: Itiúba/BA' : 'Localização: Jaguaquara/BA';
+    return 'Localização: fora da área-alvo';
+  }, [location]);
+
+  const savedAddresses: SavedAddress[] = useMemo(() => {
+    const base: SavedAddress[] = [];
+    if (enderecoPrincipal?.trim()) {
+      base.push({ id: 'main', label: 'Principal', address: enderecoPrincipal, isDefault: true });
+    }
+    return base;
+  }, [enderecoPrincipal]);
+
+  const orders: OrderHistoryItem[] = useMemo(
+    () => [
+      { id: '1001', shopName: 'Lanchonete Central', total: 45.9, dateLabel: 'Hoje', itemsPreview: 'X-Bacon, Batata, Refri' },
+      { id: '1000', shopName: 'Pizza do Bairro', total: 68.5, dateLabel: 'Ontem', itemsPreview: 'Pizza Calabresa, Coca 2L' }
+    ],
+    []
+  );
+
+  const handleSave = async () => {
+    if (!profile?.uid) return;
+    setLoading(true);
+    try {
+      const userRef = doc(db, 'users', profile.uid);
+      await updateDoc(userRef, {
+        nome,
+        telefone,
+        documento,
+        endereco: enderecoPrincipal,
+        updatedAt: new Date().toISOString()
+      });
+      await refreshProfile();
+      toast.success('Perfil atualizado!');
+    } catch {
+      toast.error('Erro ao salvar.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReorder = (orderId: string) => {
+    toast.success('Pedido adicionado ao carrinho.');
+    navigate('/cart');
+  };
+
+  return (
+    <div className="min-h-screen bg-[#070707] text-white p-6 pb-32">
+      <div className="flex items-start justify-between gap-4 mb-6">
+        <div className="flex items-center gap-4">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#FF8C00] to-[#FF4500] flex items-center justify-center shadow-[0_0_30px_rgba(255,140,0,0.25)] border border-white/10">
+            <i className="fa-solid fa-user text-2xl"></i>
+          </div>
+          <div>
+            <div className="text-xl font-black leading-tight">{profile?.nome || 'Usuário'}</div>
+            <div className="text-[10px] font-black uppercase tracking-[0.25em] text-[#FF8C00]">{profile?.email}</div>
+            <div className="text-[10px] font-black uppercase tracking-[0.25em] text-gray-500 mt-1">{cityHint}</div>
+          </div>
+        </div>
+        <button
+          onClick={() => navigate('/rewards')}
+          className="px-4 py-3 rounded-2xl bg-white/5 border border-white/10 hover:border-[#FF8C00]/40 hover:bg-[#FF8C00]/10 transition-all"
+        >
+          <div className="text-[9px] font-black uppercase tracking-widest text-gray-400">Fidelidade</div>
+          <div className="flex items-center gap-2">
+            <i className="fa-solid fa-crown text-[#FF8C00] text-sm"></i>
+            <div className="text-lg font-black">{loyaltyPoints}</div>
+          </div>
+        </button>
+      </div>
+
+      <div className="bg-[#111] border border-white/10 rounded-[28px] p-5 mb-6 shadow-[0_20px_80px_rgba(0,0,0,0.6)]">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">Progresso</div>
+          <div className="text-[10px] font-black uppercase tracking-[0.3em] text-[#00F5FF]">{loyaltyPct}%</div>
+        </div>
+        <div className="h-3 rounded-full bg-black/50 border border-white/10 overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-r from-[#00F5FF] via-[#8A2BE2] to-[#FF8C00] shadow-[0_0_30px_rgba(0,245,255,0.25)]"
+            style={{ width: `${loyaltyPct}%` }}
+          />
+        </div>
+        <div className="mt-3 text-[10px] font-black uppercase tracking-[0.25em] text-gray-500">
+          Meta: {loyaltyGoal} pontos
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6">
+        <div className="bg-[#111] border border-white/10 rounded-[28px] p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">Meus Dados</div>
+            <div className="text-[10px] font-black uppercase tracking-[0.3em] text-[#FF8C00]">Premium</div>
+          </div>
+
+          <div className="space-y-3">
+            <input
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+              placeholder="Nome"
+              className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-4 text-sm outline-none focus:border-[#00F5FF]"
+            />
+            <input
+              value={telefone}
+              onChange={(e) => setTelefone(e.target.value)}
+              placeholder="WhatsApp"
+              className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-4 text-sm outline-none focus:border-[#00F5FF]"
+            />
+            <input
+              value={documento}
+              onChange={(e) => setDocumento(e.target.value)}
+              placeholder="CPF / CNPJ"
+              className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-4 text-sm outline-none focus:border-[#00F5FF]"
+            />
+          </div>
+
+          <button
+            onClick={handleSave}
+            disabled={loading}
+            className="mt-5 w-full py-4 rounded-2xl font-black uppercase tracking-[0.25em] text-[11px] bg-[#00F5FF]/10 border border-[#00F5FF]/30 text-[#00F5FF] hover:bg-[#00F5FF]/20 hover:border-[#00F5FF]/60 transition-all disabled:opacity-50"
+          >
+            {loading ? 'Salvando…' : 'Salvar'}
+          </button>
+        </div>
+
+        <div className="bg-[#111] border border-white/10 rounded-[28px] p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">Endereços Salvos</div>
+            <button
+              onClick={() => toast('Em breve')}
+              className="px-3 py-2 rounded-xl bg-[#FF8C00]/10 border border-[#FF8C00]/30 text-[#FF8C00] hover:bg-[#FF8C00]/20 transition-all"
+            >
+              <i className="fa-solid fa-plus"></i>
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            {savedAddresses.length === 0 ? (
+              <div className="text-sm text-gray-500">Nenhum endereço salvo.</div>
+            ) : (
+              savedAddresses.map((a) => (
+                <div key={a.id} className="p-4 rounded-2xl bg-black/40 border border-white/10">
+                  <div className="flex items-center justify-between">
+                    <div className="font-black text-sm">{a.label}</div>
+                    {a.isDefault && (
+                      <div className="text-[9px] font-black uppercase tracking-widest text-[#8A2BE2]">Padrão</div>
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-400 mt-1 whitespace-pre-wrap">{a.address}</div>
+                </div>
+              ))
+            )}
+
+            <textarea
+              value={enderecoPrincipal}
+              onChange={(e) => setEnderecoPrincipal(e.target.value)}
+              placeholder="Endereço principal"
+              rows={4}
+              className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-4 text-sm outline-none focus:border-[#8A2BE2] resize-none"
+            />
+          </div>
+        </div>
+
+        <div className="bg-[#111] border border-white/10 rounded-[28px] p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">Histórico de Pedidos</div>
+          </div>
+
+          <div className="space-y-3">
+            {orders.map((o) => (
+              <div key={o.id} className="p-4 rounded-2xl bg-black/40 border border-white/10">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="font-black">{o.shopName}</div>
+                    <div className="text-xs text-gray-500">{o.dateLabel} • #{o.id}</div>
+                    <div className="text-xs text-gray-400 mt-1">{o.itemsPreview}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-black text-[#FF8C00]">R$ {o.total.toFixed(2)}</div>
+                    <button
+                      onClick={() => handleReorder(o.id)}
+                      className="mt-2 px-3 py-2 rounded-xl bg-[#8A2BE2]/10 border border-[#8A2BE2]/30 text-[#C5A3FF] hover:bg-[#8A2BE2]/20 transition-all"
+                    >
+                      Repetir Pedido
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-[#111] border border-white/10 rounded-[28px] p-6">
+          <div className="flex items-center justify-between">
+            <div className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">Segurança</div>
+          </div>
+          <button
+            onClick={() => signOut()}
+            className="mt-4 w-full py-4 rounded-2xl font-black uppercase tracking-[0.25em] text-[11px] bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 hover:border-red-500/60 transition-all"
+          >
+            Sair
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Profile;
