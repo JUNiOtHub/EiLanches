@@ -16,6 +16,7 @@ const Home: React.FC = () => {
   const [newShops, setNewShops] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState('Todos');
+  const [showFeatured, setShowFeatured] = useState(false); // Novo estado para o filtro "Em Alta"
   const [searchTerm, setSearchTerm] = useState('');
   const newShopsRef = useRef<HTMLDivElement>(null);
 
@@ -27,7 +28,24 @@ const Home: React.FC = () => {
     const q = query(collection(db, 'users'), where('tipoUsuario', '==', 'vendedor'));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
-        const shopsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const shopsData = snapshot.docs.map(doc => {
+            const data = { id: doc.id, ...doc.data() } as any;
+
+            // AJUSTE CIRÚRGICO: VÍNCULO DE IMAGENS NOS CARDS
+            // 1. ORIGEM DA URL: Busca a imagem em múltiplos campos para garantir compatibilidade.
+            let finalImageUrl = data.image || data.foto || data.logo || data.coverImage;
+
+            // 3. FALLBACK DE SEGURANÇA: Se nenhuma URL válida for encontrada, usa uma imagem padrão.
+            if (!finalImageUrl || !String(finalImageUrl).startsWith('http')) {
+                finalImageUrl = 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&q=80&w=500';
+            }
+
+            // 4. VERIFICAÇÃO (opcional): Descomente para ver os dados no console.
+            // console.log(`[ShopData] ID: ${data.id}, Nome: ${data.nomeLoja}, Imagem Final: ${finalImageUrl}`);
+
+            // Ação: Garante que a URL correta seja passada para o card, independente da prop que ele usa.
+            return { ...data, image: finalImageUrl, logo: finalImageUrl, coverImage: finalImageUrl };
+        });
         setShops(shopsData);
 
         // Ordena por data de criação (mais recente primeiro) para o carrossel "New Releases"
@@ -47,6 +65,11 @@ const Home: React.FC = () => {
   }, []);
 
   const filteredShops = shops.filter(shop => {
+    // Se o filtro "Em Alta" estiver ativo, ele tem prioridade sobre os outros.
+    if (showFeatured) {
+        return shop.isFeatured === true;
+    }
+
     const term = searchTerm.toLowerCase();
     const matchesSearch = (shop.nomeLoja || '').toLowerCase().includes(term) || (shop.category || '').toLowerCase().includes(term);
     
@@ -59,6 +82,14 @@ const Home: React.FC = () => {
         matchesCategory = cat === activeCategory;
     }
     return matchesSearch && matchesCategory;
+  }).sort((a, b) => {
+    // Ordena as lojas, colocando as fechadas no final da lista.
+    // Trata 'undefined' como 'aberto' para compatibilidade.
+    const aIsOpen = a.isOpen ?? true;
+    const bIsOpen = b.isOpen ?? true;
+    if (aIsOpen && !bIsOpen) return -1;
+    if (!aIsOpen && bIsOpen) return 1;
+    return 0;
   });
 
   const scrollToNewShops = () => {
@@ -66,8 +97,11 @@ const Home: React.FC = () => {
   };
 
   const handleTrendingClick = () => {
-    setSearchTerm('Promoção'); 
-    toast('Filtrando as melhores ofertas!', { icon: '🔥', style: { background: '#333', color: '#fff' } });
+    // Ativa um estado de filtro dedicado em vez de usar um termo de busca genérico.
+    setActiveCategory('Todos'); // Reseta o filtro de categoria
+    setSearchTerm(''); // Limpa o termo de busca
+    setShowFeatured(true); // Ativa o filtro "Em Alta"
+    toast('Mostrando as lojas em alta!', { icon: '🔥', style: { background: '#333', color: '#fff' } });
   };
 
   const handleCouponClick = () => {
@@ -105,10 +139,13 @@ const Home: React.FC = () => {
            {categories.map(cat => (
               <button
                 key={cat}
-                onClick={() => setActiveCategory(cat)}
-                className={`w-full flex items-center gap-4 p-3 rounded-xl transition-all duration-200 group relative overflow-hidden ${activeCategory === cat ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.3)]' : 'hover:bg-white/5 text-gray-400 hover:text-white'}`}
+                onClick={() => {
+                  setActiveCategory(cat);
+                  setShowFeatured(false); // Desativa o filtro "Em Alta" ao selecionar uma categoria
+                }}
+                className={`w-full flex items-center gap-4 p-3 rounded-xl transition-all duration-200 group relative overflow-hidden ${activeCategory === cat && !showFeatured ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.3)]' : 'hover:bg-white/5 text-gray-400 hover:text-white'}`}
               >
-                 {activeCategory === cat && <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#FF8C00]"></div>}
+                 {activeCategory === cat && !showFeatured && <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#FF8C00]"></div>}
                  <span className="text-lg w-6 text-center"><i className={`fa-solid ${cat === 'Todos' ? 'fa-layer-group' : cat === 'Lanches' ? 'fa-burger' : cat === 'Pizzas' ? 'fa-pizza-slice' : 'fa-utensils'}`}></i></span>
                  <span className="text-xs font-black uppercase tracking-wide z-10 hidden lg:block">{cat}</span>
               </button>
@@ -188,7 +225,14 @@ const Home: React.FC = () => {
                     <h3 className="text-xl font-black text-white mb-1">Novas Lojas</h3>
                     <p className="text-xs text-gray-400 mb-3">Confira quem acabou de chegar.</p>
                     <div className="flex -space-x-2">
-                        {[1,2,3].map(i => <div key={i} className="w-6 h-6 rounded-full bg-gray-700 border-2 border-[#181818]"></div>)}
+                        {newShops.slice(0, 3).map(shop => (
+                            <img
+                                key={shop.id}
+                                src={shop.image || shop.foto || `https://ui-avatars.com/api/?name=${shop.nomeLoja}&background=222&color=fff`}
+                                alt={shop.nomeLoja}
+                                className="w-6 h-6 rounded-full bg-gray-700 border-2 border-[#181818] object-cover"
+                            />
+                        ))}
                     </div>
                 </motion.div>
             </div>
@@ -201,16 +245,31 @@ const Home: React.FC = () => {
                 </h3>
                 <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar">
                    {newShops.map((shop) => (
-                      <div key={shop.id} className="min-w-[280px] md:min-w-[320px]">
-                         <ShopCard shop={shop} onClick={() => navigate(`/shop/${shop.id}`)} isNew={true} />
+                      <div key={shop.id} className={`min-w-[280px] md:min-w-[320px] transition-all ${!(shop.isOpen ?? true) ? 'grayscale opacity-60' : ''}`}>
+                         <ShopCard 
+                            shop={shop} 
+                            onClick={() => (shop.isOpen ?? true) ? navigate(`/shop/${shop.id}`) : toast.error(`${shop.nomeLoja} está fechado no momento.`)} 
+                            isNew={true}
+                            // Passa props para o ShopCard usar (requer modificação no ShopCard.tsx)
+                            isClosed={!(shop.isOpen ?? true)}
+                            hasFreeDelivery={shop.deliveryFee === 0}
+                         />
                       </div>
                    ))}
                 </div>
               </div>
             )}
 
-            <h2 className="text-2xl font-black text-white mb-6 flex items-center gap-3 mt-12">
-                <i className="fa-solid fa-store text-[#FF8C00]"></i> Lojas Disponíveis
+            <h2 className="text-2xl font-black text-white mb-6 flex items-center gap-3 mt-12 transition-all">
+                {showFeatured ? (
+                    <>
+                        <i className="fa-solid fa-fire text-[#FF8C00] animate-pulse"></i> Lojas em Alta
+                    </>
+                ) : (
+                    <>
+                        <i className="fa-solid fa-store text-[#FF8C00]"></i> Lojas Disponíveis
+                    </>
+                )}
             </h2>
 
             {/* SHOP GRID */}
@@ -226,8 +285,19 @@ const Home: React.FC = () => {
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: index * 0.05 }}
+                            // Adiciona efeito de grayscale e opacidade para lojas fechadas,
+                            // com uma transição suave no hover para melhor UX.
+                            className={!(shop.isOpen ?? true) ? 'grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition-all duration-300' : ''}
                         >
-                            <ShopCard shop={shop} onClick={() => navigate(`/shop/${shop.id}`)} />
+                            <ShopCard 
+                                shop={shop} 
+                                // Evita o clique em lojas fechadas e exibe um aviso.
+                                onClick={() => (shop.isOpen ?? true) ? navigate(`/shop/${shop.id}`) : toast.error(`${shop.nomeLoja} está fechado no momento.`)}
+                                // As props abaixo são passadas para o ShopCard. O componente ShopCard.tsx
+                                // precisa ser modificado para exibir o selo de "Entrega Grátis" e o status de "Fechado".
+                                isClosed={!(shop.isOpen ?? true)}
+                                hasFreeDelivery={shop.deliveryFee === 0}
+                            />
                         </motion.div>
                     ))
                 )}

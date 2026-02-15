@@ -133,12 +133,16 @@ const Menu: React.FC = () => {
                 {shop?.nomeLoja || shop?.name}
               </motion.h1>
               <div className="flex flex-wrap items-center gap-3 text-xs font-medium text-gray-300">
-                <span className="flex items-center gap-1 bg-[#FF8C00] text-white px-2 py-0.5 rounded-md font-bold">
-                  <i className="fa-solid fa-star text-[10px]"></i> {shop?.rating ? shop.rating.toFixed(1) : '5.0'}
-                </span>
-                <span className="flex items-center gap-1 bg-white/10 backdrop-blur-md px-2 py-0.5 rounded-md">
-                  <i className="fa-solid fa-clock text-[#FF8C00]"></i> {shop?.deliveryTime || '30-40 min'}
-                </span>
+                {shop?.rating > 0 && (
+                  <span className="flex items-center gap-1 bg-[#FF8C00] text-white px-2 py-0.5 rounded-md font-bold">
+                    <i className="fa-solid fa-star text-[10px]"></i> {shop.rating.toFixed(1)}
+                  </span>
+                )}
+                {shop?.deliveryTime && (
+                  <span className="flex items-center gap-1 bg-white/10 backdrop-blur-md px-2 py-0.5 rounded-md">
+                    <i className="fa-solid fa-clock text-[#FF8C00]"></i> {shop.deliveryTime}
+                  </span>
+                )}
                 <span className={shop?.isOpen ? 'text-green-500 font-bold bg-green-500/10 px-2 py-0.5 rounded-md' : 'text-red-500 font-bold bg-red-500/10 px-2 py-0.5 rounded-md'}>
                   {shop?.isOpen ? 'Aberto' : 'Fechado'}
                 </span>

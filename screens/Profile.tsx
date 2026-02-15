@@ -1,9 +1,9 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { db, doc, updateDoc } from '../firebase';
+import { db, doc, updateDoc, collection, query, where, orderBy, onSnapshot, limit } from '../firebase';
 import { useHighPrecisionGeolocation } from '../services/highPrecisionGeolocation';
 
 type SavedAddress = {
@@ -22,7 +22,7 @@ type OrderHistoryItem = {
 };
 
 const Profile: React.FC = () => {
-  const { profile, signOut, refreshProfile } = useAuth();
+  const { profile, user, signOut, refreshProfile } = useAuth();
   const navigate = useNavigate();
 
   const { location } = useHighPrecisionGeolocation({
@@ -32,6 +32,8 @@ const Profile: React.FC = () => {
   });
 
   const [loading, setLoading] = useState(false);
+  const [orders, setOrders] = useState<OrderHistoryItem[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(true);
   const [nome, setNome] = useState(profile?.nome || '');
   const [telefone, setTelefone] = useState(profile?.telefone || '');
   const [documento, setDocumento] = useState(profile?.documento || '');
@@ -66,13 +68,39 @@ const Profile: React.FC = () => {
     return base;
   }, [enderecoPrincipal]);
 
-  const orders: OrderHistoryItem[] = useMemo(
-    () => [
-      { id: '1001', shopName: 'Lanchonete Central', total: 45.9, dateLabel: 'Hoje', itemsPreview: 'X-Bacon, Batata, Refri' },
-      { id: '1000', shopName: 'Pizza do Bairro', total: 68.5, dateLabel: 'Ontem', itemsPreview: 'Pizza Calabresa, Coca 2L' }
-    ],
-    []
-  );
+  useEffect(() => {
+    if (!user?.uid) {
+        setOrdersLoading(false);
+        return;
+    }
+    setOrdersLoading(true);
+    const q = query(
+        collection(db, 'pedidos'),
+        where('clienteUid', '==', user.uid),
+        orderBy('createdAt', 'desc'),
+        limit(5) // Pega os últimos 5 pedidos para a tela de perfil
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const fetchedOrders = snapshot.docs.map(doc => {
+            const data = doc.data();
+            const date = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
+            return {
+                id: doc.id,
+                shopName: data.lojaNome,
+                total: data.finalTotal || data.total,
+                dateLabel: new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }).format(date),
+                itemsPreview: data.itens.map((i: any) => `${i.quantity}x ${i.name}`).join(', ')
+            };
+        });
+        setOrders(fetchedOrders);
+        setOrdersLoading(false);
+    }, () => {
+        setOrdersLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [user?.uid]);
 
   const handleSave = async () => {
     if (!profile?.uid) return;
@@ -220,28 +248,36 @@ const Profile: React.FC = () => {
             <div className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">Histórico de Pedidos</div>
           </div>
 
-          <div className="space-y-3">
-            {orders.map((o) => (
-              <div key={o.id} className="p-4 rounded-2xl bg-black/40 border border-white/10">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <div className="font-black">{o.shopName}</div>
-                    <div className="text-xs text-gray-500">{o.dateLabel} • #{o.id}</div>
-                    <div className="text-xs text-gray-400 mt-1">{o.itemsPreview}</div>
+          {ordersLoading ? (
+            <div className="text-center py-4 text-gray-500 text-xs">Carregando histórico...</div>
+          ) : (
+            <div className="space-y-3">
+              {orders.length === 0 ? (
+                <div className="text-center py-4 text-gray-500 text-xs">Nenhum pedido recente encontrado.</div>
+              ) : (
+                orders.map((o) => (
+                  <div key={o.id} className="p-4 rounded-2xl bg-black/40 border border-white/10">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <div className="font-black">{o.shopName}</div>
+                        <div className="text-xs text-gray-500">{o.dateLabel} • #{o.id.slice(-4)}</div>
+                        <div className="text-xs text-gray-400 mt-1 line-clamp-1">{o.itemsPreview}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-black text-[#FF8C00]">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(o.total)}</div>
+                        <button
+                          onClick={() => handleReorder(o.id)}
+                          className="mt-2 px-3 py-2 rounded-xl bg-[#8A2BE2]/10 border border-[#8A2BE2]/30 text-[#C5A3FF] hover:bg-[#8A2BE2]/20 transition-all text-[10px] font-bold"
+                        >
+                          Repetir
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <div className="font-black text-[#FF8C00]">R$ {o.total.toFixed(2)}</div>
-                    <button
-                      onClick={() => handleReorder(o.id)}
-                      className="mt-2 px-3 py-2 rounded-xl bg-[#8A2BE2]/10 border border-[#8A2BE2]/30 text-[#C5A3FF] hover:bg-[#8A2BE2]/20 transition-all"
-                    >
-                      Repetir Pedido
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+                ))
+              )}
+            </div>
+          )}
         </div>
 
         <div className="bg-[#181818] border border-white/10 rounded-2xl p-6 lg:col-span-2">
