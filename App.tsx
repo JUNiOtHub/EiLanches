@@ -19,6 +19,7 @@ import Onboarding from './screens/Onboarding';
 import Profile from './screens/Profile';
 import Rewards from './screens/Rewards';
 import Withdraw from './screens/Withdraw';
+import Terms from './screens/Terms';
 
 // --- Customer Header ---
 const Header: React.FC<{ cartCount: number; isActive: (path: string) => boolean }> = ({ cartCount, isActive }) => {
@@ -62,12 +63,15 @@ const Header: React.FC<{ cartCount: number; isActive: (path: string) => boolean 
 const MainContent: React.FC = () => {
   const authState = useAuthRouter();
   const { items } = useCart();
+  const { profile } = useAuth();
   const location = useLocation();
   
   const [showSplash, setShowSplash] = useState(true);
   
   const cartCount = items.reduce((acc, i) => acc + i.quantity, 0);
   const isActive = (path: string) => location.pathname === path;
+
+  const termsVersion = import.meta.env.VITE_TERMS_VERSION || '1.0';
 
   // Controle da Splash Screen
   useEffect(() => {
@@ -92,34 +96,53 @@ const MainContent: React.FC = () => {
 
   // 2. Perfil Incompleto -> Onboarding
   if (authState === 'ONBOARDING') {
-    return <Onboarding />;
+    return (
+      <Routes>
+        <Route path="/terms" element={<Terms />} />
+        <Route path="*" element={<Onboarding />} />
+      </Routes>
+    );
   }
 
-  // 3. Vendedor -> Dashboard Admin
+  // 3. Termos não aceitos -> Tela de Termos
+  // Força o usuário a aceitar os termos antes de prosseguir para qualquer outra parte do app.
+  if (profile?.tipoUsuario && profile.termsAccepted?.[profile.tipoUsuario] !== termsVersion) {
+    return (
+        <Routes>
+            <Route path="/terms" element={<Terms />} />
+            {/* Qualquer outra rota redireciona para a tela de termos */}
+            <Route path="*" element={<Navigate to="/terms" replace />} />
+        </Routes>
+    );
+  }
+
+  // 4. Vendedor -> Dashboard Admin
   if (authState === 'VENDOR') {
     return (
       <Routes>
         <Route path="/admin" element={<Dashboard />} />
         <Route path="/withdraw" element={<Withdraw />} />
+        <Route path="/terms" element={<Terms />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="*" element={<Navigate to="/admin" replace />} />
       </Routes>
     );
   }
 
-  // 4. Entregador -> Dashboard Delivery
+  // 5. Entregador -> Dashboard Delivery
   if (authState === 'DRIVER') {
     return (
       <Routes>
         <Route path="/delivery" element={<DeliveryDashboard />} />
         <Route path="/withdraw" element={<Withdraw />} />
+        <Route path="/terms" element={<Terms />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="*" element={<Navigate to="/delivery" replace />} />
       </Routes>
     );
   }
 
-  // 5. Cliente -> App Padrão
+  // 6. Cliente -> App Padrão
   return (
     <div className="w-full min-h-screen bg-[#0F0F0F] relative flex flex-col">
       {location.pathname !== '/' && <Header cartCount={cartCount} isActive={isActive} />}
@@ -130,6 +153,7 @@ const MainContent: React.FC = () => {
           <Route path="/orders" element={<Orders />} />
           <Route path="/order/:id" element={<OrderDetails />} />
           <Route path="/cart" element={<Cart />} />
+          <Route path="/terms" element={<Terms />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/rewards" element={<Rewards />} />
           <Route path="*" element={<Navigate to="/" replace />} />

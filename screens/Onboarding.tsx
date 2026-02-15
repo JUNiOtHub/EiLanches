@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { db, doc, setDoc } from '../firebase';
 // import { TermsModal } from '../components/TermsModal'; // Temporariamente desativado
@@ -88,6 +89,7 @@ interface UserUpdateData {
 
 const Onboarding: React.FC = () => {
   const { user, profile, refreshProfile } = useAuth();
+  const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [tipo, setTipo] = useState<'cliente' | 'vendedor' | 'entregador' | null>(null);
   const [loading, setLoading] = useState(false);
@@ -426,14 +428,31 @@ const Onboarding: React.FC = () => {
         </div>
 
         <div className="p-4">
-            <label className="flex items-center space-x-4 cursor-pointer">
-                <div className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-all duration-300 ${formData.agreedToTerms ? 'bg-[#FF8C00] border-[#FF8C00] shadow-[0_0_15px_rgba(255,140,0,0.3)]' : 'border-white/20 bg-white/5'}`}>
-                  {formData.agreedToTerms && <i className="fa-solid fa-check text-white text-xs"></i>}
+            <div className="flex items-start space-x-4">
+                <input id="terms-checkbox" type="checkbox" className="hidden" checked={formData.agreedToTerms} onChange={e => setFormField('agreedToTerms', e.target.checked)}/>
+                <label htmlFor="terms-checkbox" className="flex-shrink-0 cursor-pointer">
+                    <div className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-all duration-300 ${formData.agreedToTerms ? 'bg-[#FF8C00] border-[#FF8C00] shadow-[0_0_15px_rgba(255,140,0,0.3)]' : 'border-white/20 bg-white/5'}`}>
+                      {formData.agreedToTerms && <i className="fa-solid fa-check text-white text-xs"></i>}
+                    </div>
+                </label>
+                <div className="flex-1">
+                    <label htmlFor="terms-checkbox" className="text-gray-400 text-sm cursor-pointer">
+                        Eu li e concordo com os{' '}
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                navigate('/terms', { state: { userType: tipo } });
+                            }}
+                            className="text-[#FF8C00] font-bold hover:underline"
+                        >
+                            Termos de Serviço
+                        </button>.
+                    </label>
+                    {errors.agreedToTerms && <p className="text-red-500 text-[10px] font-bold mt-1">{errors.agreedToTerms}</p>}
                 </div>
-                <input type="checkbox" className="hidden" checked={formData.agreedToTerms} onChange={e => setFormField('agreedToTerms', e.target.checked)}/>
-                <span className="text-gray-400 text-sm">Eu li e concordo com os Termos de Serviço.</span>
-            </label>
-            {errors.agreedToTerms && <p className="text-red-500 text-[10px] font-bold ml-12 mt-1">{errors.agreedToTerms}</p>}
+            </div>
         </div>
       </div>
 
