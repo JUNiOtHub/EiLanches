@@ -62,14 +62,23 @@ const NetworkStatus: React.FC = () => {
 };
 
 // --- Header Desktop Premium ---
-const Header: React.FC<{ cartCount: number; isActive: (p: string) => boolean }> = ({ cartCount, isActive }) => {
+const Header: React.FC<{ cartCount: number; isActive: (p: string) => boolean }> = React.memo(({ cartCount, isActive }) => {
   const { profile, signOut } = useAuth();
   const [isDropdownOpen, setDropdownOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 30);
+    let ticking = false;
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          setScrolled(window.scrollY > 30);
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
@@ -78,8 +87,17 @@ const Header: React.FC<{ cartCount: number; isActive: (p: string) => boolean }> 
     const clickOutside = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setDropdownOpen(false);
     };
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDropdownOpen(false);
+    };
+
     document.addEventListener('mousedown', clickOutside);
-    return () => document.removeEventListener('mousedown', clickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', clickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
   }, []);
 
   return (
@@ -87,26 +105,35 @@ const Header: React.FC<{ cartCount: number; isActive: (p: string) => boolean }> 
       scrolled ? 'bg-[#141414]/95 backdrop-blur-xl border-white/10 py-3 shadow-2xl' : 'bg-transparent border-transparent py-6'
     }`}>
       <div className="flex items-center gap-10">
-        <Link to="/" className="text-2xl font-black text-white flex items-center gap-2 group">
-          <div className="w-10 h-10 bg-gradient-to-br from-[#FF8C00] to-[#FF4500] rounded-xl flex items-center justify-center shadow-lg group-hover:rotate-12 transition-transform duration-300">
+        <Link to="/" aria-label="Ir para página inicial" className="text-2xl font-black text-white flex items-center gap-2 group">
+          <div className="w-10 h-10 bg-gradient-to-br from-[#FF8C00] to-[#FF4500] rounded-xl flex items-center justify-center shadow-lg group-hover:rotate-12 transition-transform duration-300" aria-hidden="true">
             <i className="fa-solid fa-rocket text-sm text-white"></i>
           </div>
           <span className="tracking-tighter">EiLanches</span>
         </Link>
         
-        <nav className="flex items-center gap-8">
+        <nav className="flex items-center gap-8" aria-label="Navegação Principal">
           {DESKTOP_NAV_LINKS.map(link => (
-            <Link key={link.path} to={link.path} className={`text-sm font-bold transition-all relative ${isActive(link.path) ? 'text-white' : 'text-gray-500 hover:text-white'}`}>
+            <Link 
+              key={link.path} 
+              to={link.path} 
+              aria-current={isActive(link.path) ? 'page' : undefined}
+              className={`text-sm font-bold transition-all relative ${isActive(link.path) ? 'text-white' : 'text-gray-500 hover:text-white'}`}
+            >
               {link.label}
-              {isActive(link.path) && <span className="absolute -bottom-2 left-0 w-full h-1 bg-[#FF8C00] rounded-full shadow-[0_0_10px_#FF8C00]" />}
+              {isActive(link.path) && <span className="absolute -bottom-2 left-0 w-full h-1 bg-[#FF8C00] rounded-full shadow-[0_0_10px_#FF8C00]" aria-hidden="true" />}
             </Link>
           ))}
         </nav>
       </div>
 
       <div className="flex items-center gap-6">
-        <Link to="/cart" className={`relative p-2 transition-transform hover:scale-110 ${isActive('/cart') ? 'text-[#FF8C00]' : 'text-gray-400'}`}>
-          <i className="fa-solid fa-bag-shopping text-xl"></i>
+        <Link 
+          to="/cart" 
+          aria-label={`Sacola de compras, ${cartCount} itens`}
+          className={`relative p-2 transition-transform hover:scale-110 ${isActive('/cart') ? 'text-[#FF8C00]' : 'text-gray-400'}`}
+        >
+          <i className="fa-solid fa-bag-shopping text-xl" aria-hidden="true"></i>
           {cartCount > 0 && (
             <span className="absolute -top-1 -right-1 bg-[#FF8C00] text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-black border-2 border-[#141414]">
               {cartCount}
@@ -115,22 +142,41 @@ const Header: React.FC<{ cartCount: number; isActive: (p: string) => boolean }> 
         </Link>
 
         <div className="relative" ref={dropdownRef}>
-          <button onClick={() => setDropdownOpen(!isDropdownOpen)} className="flex items-center gap-3 p-1 pr-4 rounded-full bg-white/5 border border-white/10 hover:border-[#FF8C00]/50 transition-all">
+          <button 
+            onClick={() => setDropdownOpen(!isDropdownOpen)} 
+            aria-expanded={isDropdownOpen}
+            aria-haspopup="true"
+            aria-label="Menu do usuário"
+            className="flex items-center gap-3 p-1 pr-4 rounded-full bg-white/5 border border-white/10 hover:border-[#FF8C00]/50 transition-all"
+          >
             <img 
               src={profile?.foto || `https://ui-avatars.com/api/?name=${profile?.nome || 'User'}&background=FF8C00&color=fff&bold=true`} 
-              className="w-9 h-9 rounded-full object-cover" alt="User"
+              className="w-9 h-9 rounded-full object-cover" 
+              alt={`Foto de perfil de ${profile?.nome || 'Usuário'}`}
             />
             <span className="text-xs font-black text-gray-200 uppercase tracking-widest">{profile?.nome?.split(' ')[0]}</span>
-            <i className={`fa-solid fa-chevron-down text-[10px] transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+            <i className={`fa-solid fa-chevron-down text-[10px] transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
           </button>
 
           {isDropdownOpen && (
-            <div className="absolute right-0 mt-4 w-52 bg-[#1A1A1A] border border-white/10 rounded-2xl shadow-2xl py-2 z-[110] animate-in fade-in slide-in-from-top-2">
-              <Link to="/profile" onClick={() => setDropdownOpen(false)} className="flex items-center px-4 py-3 text-sm text-gray-300 hover:bg-[#FF8C00] hover:text-white transition-colors">
-                <i className="fa-solid fa-user-circle w-6"></i> Meu Perfil
+            <div 
+              role="menu"
+              className="absolute right-0 mt-4 w-52 bg-[#1A1A1A] border border-white/10 rounded-2xl shadow-2xl py-2 z-[110] animate-in fade-in slide-in-from-top-2"
+            >
+              <Link 
+                to="/profile" 
+                role="menuitem"
+                onClick={() => setDropdownOpen(false)} 
+                className="flex items-center px-4 py-3 text-sm text-gray-300 hover:bg-[#FF8C00] hover:text-white transition-colors"
+              >
+                <i className="fa-solid fa-user-circle w-6" aria-hidden="true"></i> Meu Perfil
               </Link>
-              <button onClick={() => { signOut(); setDropdownOpen(false); }} className="flex items-center w-full px-4 py-3 text-sm text-red-500 hover:bg-red-500/10 transition-colors font-bold">
-                <i className="fa-solid fa-power-off w-6"></i> Sair
+              <button 
+                role="menuitem"
+                onClick={() => { signOut(); setDropdownOpen(false); }} 
+                className="flex items-center w-full px-4 py-3 text-sm text-red-500 hover:bg-red-500/10 transition-colors font-bold"
+              >
+                <i className="fa-solid fa-power-off w-6" aria-hidden="true"></i> Sair
               </button>
             </div>
           )}
@@ -138,7 +184,7 @@ const Header: React.FC<{ cartCount: number; isActive: (p: string) => boolean }> 
       </div>
     </header>
   );
-};
+});
 
 // --- Roteador Principal da Aplicação ---
 const AppRouter: React.FC = () => {
@@ -152,9 +198,9 @@ const AppRouter: React.FC = () => {
   const termsVersion = import.meta.env.VITE_TERMS_VERSION || '1.0';
 
   // Definição de perfis para clareza e segurança
-  const isCustomer = authState === 'CUSTOMER';
-  const isVendor = authState === 'VENDOR';
-  const isDriver = authState === 'DRIVER';
+  const isCustomer = authState === 'cliente' || authState === 'CUSTOMER';
+  const isVendor = authState === 'vendedor' || authState === 'VENDOR';
+  const isDriver = authState === 'entregador' || authState === 'DRIVER';
 
   // 1. Estado de Login
   if (authState === 'UNAUTHENTICATED') {
@@ -162,7 +208,7 @@ const AppRouter: React.FC = () => {
   }
 
   // 2. Bloqueio de Segurança: Onboarding e Termos
-  const needsOnboarding = authState === 'ONBOARDING';
+  const needsOnboarding = authState === 'ONBOARDING' || (authState !== 'UNAUTHENTICATED' && !profile?.tipoUsuario);
   const needsTerms = profile?.tipoUsuario && profile.termsAccepted?.[profile.tipoUsuario] !== termsVersion;
 
   if (needsOnboarding || needsTerms) {
@@ -176,13 +222,13 @@ const AppRouter: React.FC = () => {
 
   // 3. Layout Principal para Usuários Autenticados
   return (
-    <div className="w-full min-h-screen bg-[#0A0A0A] relative flex flex-col">
+    <div className="w-full h-full bg-[#0A0A0A] relative flex flex-col overflow-hidden">
       <NetworkStatus />
       
       {/* Header e Navegação condicional para Clientes */}
       {isCustomer && <Header cartCount={cartCount} isActive={isActive} />}
       
-      <main className={`flex-1 flex flex-col ${isCustomer ? 'pb-32 md:pb-10' : ''}`}>
+      <main className={`flex-1 flex flex-col min-h-0 relative ${isCustomer ? 'pb-32 md:pb-10' : ''}`}>
         <Routes>
           {/* --- ÁREA DO VENDEDOR (BLINDADA) --- */}
           {isVendor && (
@@ -266,8 +312,8 @@ const App: React.FC = () => (
   <AuthProvider>
     <CartProvider>
       <Router>
-        <div className="min-h-screen bg-[#050505] text-white font-sans flex justify-center selection:bg-[#FF8C00]/30 overflow-x-hidden">
-          <div className="w-full max-w-7xl relative flex flex-col">
+        <div className="h-screen bg-[#050505] text-white font-sans flex justify-center selection:bg-[#FF8C00]/30 overflow-hidden">
+          <div className="w-full max-w-7xl h-full relative flex flex-col">
             <Toaster position="top-center" toastOptions={{
               className: 'font-bold',
               style: { background: '#1A1A1A', color: '#fff', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '20px' }
