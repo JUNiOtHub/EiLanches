@@ -54,10 +54,6 @@ const DeliveryDashboard: React.FC = () => {
   const [isOnline, setIsOnline] = useState(true);
   const [isTracking, setIsTracking] = useState(false);
   const [earningsFilter, setEarningsFilter] = useState<'today' | 'week' | 'month'>('today');
-  const [verificationCode, setVerificationCode] = useState('');
-  const [showCodeInput, setShowCodeInput] = useState<string | null>(null);
-  const [proofUrl, setProofUrl] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
   const [vehicleType, setVehicleType] = useState(profile?.vehicleType || 'moto');
   const [totalBalance, setTotalBalance] = useState(0);
 
@@ -190,22 +186,6 @@ const DeliveryDashboard: React.FC = () => {
     return { total, count: filtered.length, history: filtered };
   }, [myDeliveries, earningsFilter]);
 
-  // Função de Upload para o ImgBB
-  const uploadToImgBB = async (file: Blob) => {
-    const formData = new FormData();
-    formData.append("image", file);
-    const apiKey = ENV.IMGBB.key || '4f069942c132182449dea4cf00814506'; // Chave do ImgBB
-    
-    const response = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
-      method: "POST",
-      body: formData,
-    });
-    
-    const data = await response.json();
-    if (!data.success) throw new Error(data.error?.message || "Falha no upload");
-    return data.data;
-  };
-
   const acceptDelivery = async (orderId: string) => {
     if (!user) return;
     try {
@@ -222,20 +202,6 @@ const DeliveryDashboard: React.FC = () => {
     }
   };
 
-  const handleUploadProof = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || !e.target.files[0]) return;
-    setUploading(true);
-    try {
-      const data = await uploadToImgBB(e.target.files[0]);
-      setProofUrl(data.url);
-      toast.success("Comprovante anexado!");
-    } catch (error) {
-      toast.error("Erro ao enviar foto.");
-    } finally {
-      setUploading(false);
-    }
-  };
-
   // Função auxiliar para calcular distância em metros (Haversine)
   const getDistanceFromLatLonInMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371e3; // Raio da terra em metros
@@ -247,82 +213,6 @@ const DeliveryDashboard: React.FC = () => {
       Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
-  };
-
-  const finishDelivery = async (orderId: string, correctCode: string) => {
-    if (!verificationCode || verificationCode.length !== 4) {
-      toast.error("Digite o código de 4 dígitos.");
-      return;
-    }
-
-    // 3. GEOFENCING: Verifica se o entregador está perto do local (ex: 150 metros)
-    const order = myDeliveries.find(o => o.id === orderId);
-    if (order && order.lat && order.lng) {
-      const distance = getDistanceFromLatLonInMeters(
-        centerPosition[0], centerPosition[1],
-        order.lat, order.lng
-      );
-      
-      // Nota: Em produção, ajuste a tolerância conforme a precisão do GPS
-      if (distance > 150) {
-        toast.error(`Você está a ${Math.round(distance)}m do local. Aproxime-se para validar.`);
-        return;
-      }
-    }
-
-    const toastId = toast.loading("Validando PIN...");
-
-    try {
-      // Região deve coincidir com a da Cloud Function (evita CORS e roteamento)
-      const functions = getFunctions(app, 'southamerica-east1');
-      const validateDeliveryPIN = httpsCallable(functions, 'validateDeliveryPIN');
-      
-      const result: any = await validateDeliveryPIN({ orderId, pin: verificationCode });
-      
-      if (result.data.success) {
-        toast.success("Código confirmado! Entrega finalizada.", { id: toastId });
-        setShowCodeInput(null);
-        setVerificationCode('');
-        setProofUrl(null);
-      } else {
-        toast.error("Código inválido.", { id: toastId });
-      }
-    } catch (error: any) {
-      
-      let msg = error.message || "Erro na validação.";
-      
-      // Tratamento específico para diferentes tipos de erro
-      if (error.code === 'internal' || error.message?.includes('CORS')) {
-        msg = "Serviço de validação indisponível. Usando validação local...";
-        
-        // Fallback: validar localmente se o código está correto
-        if (verificationCode === correctCode) {
-          // Atualizar pedido diretamente no Firestore
-          try {
-            const orderRef = doc(db, 'pedidos', orderId);
-            await updateDoc(orderRef, {
-              status: 'concluido',
-              entregueEm: serverTimestamp(),
-              proofUrl: proofUrl || null
-            });
-            
-            toast.success("Entrega finalizada com sucesso!", { id: toastId });
-            setShowCodeInput(null);
-            setVerificationCode('');
-            setProofUrl(null);
-            return;
-          } catch (updateError) {
-            msg = "Erro ao finalizar entrega. Tente novamente.";
-          }
-        } else {
-          msg = "Código inválido.";
-        }
-      } else if (error.code === 'unavailable' || error.code === 'deadline-exceeded') {
-        msg = "Servidor temporariamente indisponível. Tente novamente.";
-      }
-      
-      toast.error(msg, { id: toastId, duration: 6000 });
-    }
   };
 
   const toggleOnlineStatus = async () => {
@@ -486,48 +376,17 @@ const DeliveryDashboard: React.FC = () => {
             {myDeliveries.filter(d => d.status === 'entrega').length === 0 ? (
               <div className="text-center py-20 opacity-50"><i className="fa-solid fa-person-biking text-4xl mb-4"></i><p>Sem entregas ativas.</p></div>
             ) : myDeliveries.filter(d => d.status === 'entrega').map(order => (
-              <div key={order.id} className="bg-[#1E1E1E] p-6 rounded-[32px] border border-[#FF8C00]/30 shadow-lg">
+              <div key={order.id} onClick={() => navigate(`/order/${order.id}`)} className="bg-[#1E1E1E] p-6 rounded-[32px] border border-[#FF8C00]/30 shadow-lg cursor-pointer hover:bg-[#2a2a2a] transition-colors">
                 <div className="flex justify-between items-center mb-4">
                   <span className="bg-[#FF8C00] text-white px-3 py-1 rounded-lg text-[10px] font-black uppercase animate-pulse">Em Andamento</span>
                   <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.endereco)}`} target="_blank" rel="noopener noreferrer" className="text-[#FF8C00]"><i className="fa-solid fa-location-arrow text-xl"></i></a>
                 </div>
                 <h3 className="text-xl font-black text-white mb-1">{order.clienteNome}</h3>
-                <p className="text-gray-400 text-sm mb-6">{order.endereco}</p>
-                
-                {/* UPLOAD DE COMPROVANTE */}
-                <div className="mb-4">
-                  <label className="block w-full bg-black/40 border border-dashed border-white/20 rounded-xl p-4 text-center cursor-pointer hover:border-[#FF8C00] transition-colors">
-                    {uploading ? (
-                      <span className="text-gray-400 text-xs"><i className="fa-solid fa-circle-notch fa-spin mr-2"></i>Enviando...</span>
-                    ) : proofUrl ? (
-                      <div className="flex items-center justify-center text-green-500 text-xs font-bold">
-                        <i className="fa-solid fa-check-circle mr-2"></i> Foto Anexada
-                      </div>
-                    ) : (
-                      <span className="text-gray-400 text-xs font-bold"><i className="fa-solid fa-camera mr-2"></i> Foto da Entrega (Opcional)</span>
-                    )}
-                    <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleUploadProof} disabled={uploading} />
-                  </label>
-                  {proofUrl && <img src={proofUrl} alt="Comprovante" className="mt-2 h-20 w-full object-cover rounded-lg opacity-50" />}
+                <p className="text-gray-400 text-sm mb-4">{order.endereco}</p>
+                <div className="w-full bg-white/10 text-white py-3 rounded-xl font-black uppercase text-xs tracking-widest shadow-lg flex items-center justify-center gap-2">
+                  Ver Detalhes & Confirmar PIN
+                  <i className="fa-solid fa-arrow-right"></i>
                 </div>
-
-                {showCodeInput === order.id ? (
-                  <div className="space-y-3 animate-in fade-in">
-                    <input 
-                      type="text" 
-                      placeholder="Código do Cliente (4 dígitos)" 
-                      maxLength={4}
-                      value={verificationCode}
-                      onChange={(e) => setVerificationCode(e.target.value)}
-                      className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-center text-white font-black tracking-[0.5em] text-lg outline-none focus:border-[#FF8C00]"
-                    />
-                    <button onClick={() => finishDelivery(order.id, order.deliveryCode)} className="w-full bg-green-600 text-white py-3 rounded-xl font-black uppercase text-xs shadow-lg">Confirmar Código</button>
-                  </div>
-                ) : (
-                  <button onClick={() => setShowCodeInput(order.id)} className="w-full bg-[#FF8C00] text-white py-4 rounded-2xl font-black uppercase text-xs shadow-lg active:scale-95">
-                    Finalizar Entrega (+ R$ 5,00)
-                  </button>
-                )}
               </div>
             ))}
           </div>

@@ -1,11 +1,15 @@
+export type OrderStatus = 'PENDING' | 'PREPARING' | 'READY' | 'OUT_FOR_DELIVERY' | 'DELIVERED';
+
 export interface OrderData {
   id: string;
   clienteNome: string;
   clienteTelefone: string;
   lojaNome: string;
-  status: string;
+  status: OrderStatus;
   finalTotal: number;
   createdAt: any;
+  deliveryMethod?: 'DELIVERY' | 'PICKUP';
+  pin?: string;
   itens?: Array<{
     quantidade: number;
     produtoNome: string;
@@ -18,7 +22,7 @@ export interface OrderData {
   };
 }
 
-export enum OrderStatus {
+export enum LegacyOrderStatus {
   PENDENTE = 'pendente',
   CONFIRMADO = 'confirmado',
   PREPARANDO = 'preparando',

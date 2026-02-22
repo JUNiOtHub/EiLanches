@@ -8,22 +8,13 @@ import { generateWeeklyReport } from './reportService';
  * - validateDeliveryPIN: callable que valida PIN e libera saldo (pendente -> disponível)
  */
 
-import * as functions from "firebase-functions/v1";
+import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 
 admin.initializeApp();
 
 const db = admin.firestore();
-
-// Types para Firebase Functions v1
-interface Change {
-  before: admin.firestore.DocumentSnapshot;
-  after: admin.firestore.DocumentSnapshot;
-}
-
-interface Context {
-  params: { [key: string]: string };
-}
 
 function creditLojistaPendente(tx: admin.firestore.Transaction, lojaId: string, netValue: number, orderRef: admin.firestore.DocumentReference) {
   const walletRef = db.doc(`wallets/${lojaId}`);
@@ -46,12 +37,16 @@ function creditLojistaPendente(tx: admin.firestore.Transaction, lojaId: string, 
  * incrementa o saldo de pontos do cliente no users/{clienteUid}.
  * Só credita uma vez por pedido (usa campo loyaltyPointsCredited no pedido).
  */
-export const onOrderConcludedCreditLoyalty = functions
-  .region("southamerica-east1")
-  .firestore.document("pedidos/{pedidoId}")
-  .onUpdate(async (change: Change, context: Context) => {
-    const after = change.after.data();
-    const before = change.before.data();
+export const onOrderConcludedCreditLoyalty = onDocumentUpdated({
+  document: "pedidos/{pedidoId}",
+  region: "southamerica-east1",
+}, async (event) => {
+    const snap = event.data;
+    if (!snap) {
+      return null;
+    }
+    const after = snap.after.data();
+    const before = snap.before.data();
 
     const newStatus = after?.status;
     const oldStatus = before?.status;
@@ -61,7 +56,7 @@ export const onOrderConcludedCreditLoyalty = functions
       return null;
     }
 
-    const pedidoId = context.params.pedidoId;
+    const pedidoId = event.params.pedidoId;
     const clienteUid = after?.clienteUid;
     const pointsEarned = typeof after?.loyaltyPointsEarned === "number"
       ? after.loyaltyPointsEarned
@@ -77,7 +72,7 @@ export const onOrderConcludedCreditLoyalty = functions
     }
 
     const userRef = db.doc(`users/${clienteUid}`);
-    const pedidoRef = change.after.ref;
+    const pedidoRef = snap.after.ref;
 
     try {
       await db.runTransaction(async (tx) => {
@@ -96,7 +91,7 @@ export const onOrderConcludedCreditLoyalty = functions
         });
       });
     } catch (e) {
-      functions.logger.error("onOrderConcludedCreditLoyalty", { pedidoId, clienteUid, pointsEarned, error: e });
+      console.error("onOrderConcludedCreditLoyalty", { pedidoId, clienteUid, pointsEarned, error: e });
       throw e;
     }
 
@@ -107,12 +102,15 @@ export const onOrderConcludedCreditLoyalty = functions
  * Ao criar um pedido: credita o saldo pendente da carteira do lojista (dinheiro/cartão).
  * Ao atualizar um pedido: se asaasPaymentId for definido (PIX gerado), credita o pendente do lojista.
  */
-export const onOrderCreatedCreditWallet = functions
-  .region("southamerica-east1")
-  .firestore.document("pedidos/{pedidoId}")
-  .onCreate(async (snap: admin.firestore.DocumentSnapshot, context: Context) => {
+export const onOrderCreatedCreditWallet = onDocumentCreated({
+  document: "pedidos/{pedidoId}",
+  region: "southamerica-east1",
+}, async (event) => {
+    const snap = event.data;
+    if (!snap) return null;
+
     const data = snap.data();
-    if (data.walletCreditedPendente || data.status === "falha_pagamento") return null;
+    if (!data || data.walletCreditedPendente || data.status === "falha_pagamento") return null;
     const lojaId = data.lojaId;
     const netValue = Number(data.netValue ?? 0);
     if (!lojaId || netValue <= 0) return null;
@@ -125,18 +123,21 @@ export const onOrderCreatedCreditWallet = functions
 /**
  * Quando um pedido recebe asaasPaymentId (PIX gerado), credita o pendente do lojista.
  */
-export const onOrderUpdatedCreditWalletPix = functions
-  .region("southamerica-east1")
-  .firestore.document("pedidos/{pedidoId}")
-  .onUpdate(async (change: Change, context: Context) => {
-    const before = change.before.data();
-    const after = change.after.data();
-    if (after.walletCreditedPendente || after.status === "falha_pagamento") return null;
+export const onOrderUpdatedCreditWalletPix = onDocumentUpdated({
+  document: "pedidos/{pedidoId}",
+  region: "southamerica-east1",
+}, async (event) => {
+    const snap = event.data;
+    if (!snap) return null;
+    const before = snap.before.data();
+    const after = snap.after.data();
+
+    if (!after || after.walletCreditedPendente || after.status === "falha_pagamento") return null;
     if (!after.asaasPaymentId || before.asaasPaymentId) return null; // só quando asaasPaymentId acaba de ser setado
     const lojaId = after.lojaId;
     const netValue = Number(after.netValue ?? 0);
     if (!lojaId || netValue <= 0) return null;
-    const orderRef = change.after.ref;
+    const orderRef = snap.after.ref;
     await db.runTransaction((tx) => creditLojistaPendente(tx, lojaId, netValue, orderRef));
     return null;
   });
@@ -145,15 +146,17 @@ export const onOrderUpdatedCreditWalletPix = functions
  * Valida o PIN de entrega e marca o pedido como concluído.
  * Callable (httpsCallable no front) — o Firebase trata CORS automaticamente para callables.
  */
-export const validateDeliveryPIN = functions
-  .region("southamerica-east1")
-  .https.onCall(async (data: any, context: any) => {
-    if (!context.auth) {
-      throw new functions.https.HttpsError("unauthenticated", "Usuário não autenticado.");
+export const validateDeliveryPIN = onCall({
+  region: "southamerica-east1",
+}, async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Usuário não autenticado.");
     }
-    const { orderId, pin } = data || {};
+    const { orderId, pin } = request.data || {};
+    const contextUid = request.auth.uid;
+
     if (!orderId || pin === undefined || pin === null) {
-      throw new functions.https.HttpsError("invalid-argument", "orderId e pin são obrigatórios.");
+      throw new HttpsError("invalid-argument", "orderId e pin são obrigatórios.");
     }
 
     const pedidoRef = db.doc(`pedidos/${orderId}`);
@@ -163,6 +166,15 @@ export const validateDeliveryPIN = functions
     }
 
     const pedido = snap.data()!;
+
+    // --- LÓGICA DE AUTORIZAÇÃO MELHORADA ---
+    const isDriver = contextUid === pedido.entregadorUid;
+    const isShopOwnerForPickup = contextUid === pedido.lojaId && pedido.deliveryMode === "pickup";
+
+    if (!isDriver && !isShopOwnerForPickup) {
+      throw new HttpsError("permission-denied", "Você não tem permissão para confirmar este pedido.");
+    }
+
     const codigoCorreto = String(pedido.deliveryCode || "").trim();
     const codigoInformado = String(pin).trim();
 
@@ -170,19 +182,18 @@ export const validateDeliveryPIN = functions
       return { success: false, message: "Código inválido." };
     }
 
-    const entregadorUid = context.auth.uid;
     const lojaId = pedido.lojaId;
     const netValue = Number(pedido.netValue ?? pedido.finalTotal ?? 0);
     const driverFee = Number(pedido.driverFee ?? pedido.deliveryFee ?? 0);
     const alreadyLiberado = pedido.walletLiberado === true;
     const lojaWalletRef = db.doc(`wallets/${lojaId}`);
-    const driverWalletRef = db.doc(`wallets/${entregadorUid}`);
+    const driverWalletRef = db.doc(`wallets/${pedido.entregadorUid || 'no_driver'}`);
 
     await db.runTransaction(async (tx) => {
       // Leituras primeiro (exigência do Firestore)
       const [lojaSnap, driverSnap] = await Promise.all([
         lojaId ? tx.get(lojaWalletRef) : Promise.resolve(null),
-        entregadorUid && driverFee > 0 ? tx.get(driverWalletRef) : Promise.resolve(null),
+        isDriver && driverFee > 0 ? tx.get(driverWalletRef) : Promise.resolve(null),
       ]);
 
       const lojaPendente = lojaSnap?.exists ? Number(lojaSnap.data()?.saldoPendente ?? 0) : 0;
@@ -194,7 +205,7 @@ export const validateDeliveryPIN = functions
       tx.update(pedidoRef, {
         status: "concluido",
         concluidoEm: admin.firestore.FieldValue.serverTimestamp(),
-        confirmadoPeloEntregadorUid: entregadorUid,
+        confirmadoPorUid: contextUid, // Campo genérico para quem confirmou
         walletLiberado: true,
       });
 
@@ -207,7 +218,8 @@ export const validateDeliveryPIN = functions
         }, { merge: true });
       }
 
-      if (entregadorUid && driverFee > 0) {
+      // Só credita o entregador se for uma entrega e tiver taxa
+      if (isDriver && driverFee > 0) {
         tx.set(driverWalletRef, {
           saldoDisponivel: driverDisponivel + driverFee,
           totalHistorico: driverHistorico + driverFee,

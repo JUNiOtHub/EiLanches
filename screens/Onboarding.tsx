@@ -7,7 +7,7 @@ import { db, doc, setDoc } from '../firebase';
 
 // --- UTILITY FUNCTIONS ---
 
-const maskPhone = (v: string) => {
+export const maskPhone = (v: string) => {
   v = v.replace(/\D/g, '').slice(0, 11);
   if (v.length > 10) return v.replace(/^(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
   if (v.length > 6) return v.replace(/^(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3');
@@ -15,9 +15,9 @@ const maskPhone = (v: string) => {
   return v;
 };
 
-const maskCep = (v: string) => v.replace(/\D/g, '').slice(0, 8).replace(/(\d{5})(\d)/, '$1-$2');
+export const maskCep = (v: string) => v.replace(/\D/g, '').slice(0, 8).replace(/(\d{5})(\d)/, '$1-$2');
 
-const isValidCPF = (cpf: string) => {
+export const isValidCPF = (cpf: string) => {
   cpf = cpf.replace(/[^\d]+/g, '');
   if (cpf.length !== 11 || !!cpf.match(/(\d)\1{10}/)) return false;
   let soma = 0;
@@ -33,7 +33,7 @@ const isValidCPF = (cpf: string) => {
   return true;
 };
 
-const isValidCNPJ = (cnpj: string): boolean => {
+export const isValidCNPJ = (cnpj: string): boolean => {
     cnpj = cnpj.replace(/[^\d]+/g, '');
     if (cnpj.length !== 14 || !!cnpj.match(/(\d)\1{13}/)) return false;
     let tamanho = cnpj.length - 2;
@@ -60,7 +60,7 @@ const isValidCNPJ = (cnpj: string): boolean => {
     return true;
 };
 
-const maskDocument = (v: string) => {
+export const maskDocument = (v: string) => {
     v = v.replace(/\D/g, '');
     if (v.length <= 11) {
         return v.slice(0, 11).replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2');

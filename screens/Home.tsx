@@ -109,7 +109,7 @@ const Home: React.FC = () => {
   };
 
   return (
-    <div className="h-screen bg-[#0a0a0a] text-white font-sans selection:bg-[#FF8C00] selection:text-black overflow-hidden flex flex-col md:flex-row">
+    <div className="w-full h-full bg-[#0a0a0a] text-white font-sans selection:bg-[#FF8C00] selection:text-black flex flex-col md:flex-row overflow-hidden">
       
       {/* LEFT SIDEBAR (NAVIGATION) */}
       <div className="hidden md:flex flex-col w-20 lg:w-64 bg-[#121212] border-r border-white/5 h-full pt-8 px-4 gap-6 shrink-0 z-20">
@@ -193,7 +193,7 @@ const Home: React.FC = () => {
             {/* WIDGETS ROW */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
                 {/* Widget 1: Trending */}
-                <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.1 }} className="bg-gradient-to-br from-[#181818] to-[#121212] p-5 rounded-2xl border border-white/5 relative overflow-hidden group cursor-pointer hover:border-[#FF8C00]/30 transition-all">
+                <div className="bg-gradient-to-br from-[#181818] to-[#121212] p-5 rounded-2xl border border-white/5 relative overflow-hidden group cursor-pointer hover:border-[#FF8C00]/30 transition-all">
                     <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
                         <i className="fa-solid fa-fire text-6xl text-[#FF8C00]"></i>
                     </div>
@@ -203,10 +203,10 @@ const Home: React.FC = () => {
                     <button onClick={handleTrendingClick} className="bg-[#FF8C00] text-white px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-transform">
                         Ver Oferta
                     </button>
-                </motion.div>
+                </div>
 
                 {/* Widget 2: Coupons */}
-                <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }} className="bg-[#FF8C00] p-5 rounded-2xl border border-white/5 relative overflow-hidden group cursor-pointer shadow-[0_0_30px_rgba(255,140,0,0.15)]">
+                <div className="bg-[#FF8C00] p-5 rounded-2xl border border-white/5 relative overflow-hidden group cursor-pointer shadow-[0_0_30px_rgba(255,140,0,0.15)]">
                     <div className="absolute -right-4 -bottom-4 opacity-20">
                         <i className="fa-solid fa-ticket text-8xl text-black"></i>
                     </div>
@@ -214,10 +214,10 @@ const Home: React.FC = () => {
                     <h3 className="text-xl font-black text-white mb-1">Entrega Grátis</h3>
                     <p className="text-xs text-white/80 mb-3">Resgate seu cupom diário agora.</p>
                     <button onClick={handleCouponClick} className="bg-black text-white px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-transform">Resgatar</button>
-                </motion.div>
+                </div>
 
                 {/* Widget 3: Discovery */}
-                <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }} onClick={scrollToNewShops} className="bg-gradient-to-br from-[#181818] to-[#121212] p-5 rounded-2xl border border-white/5 relative overflow-hidden group cursor-pointer hover:border-blue-500/30 transition-all">
+                <div onClick={scrollToNewShops} className="bg-gradient-to-br from-[#181818] to-[#121212] p-5 rounded-2xl border border-white/5 relative overflow-hidden group cursor-pointer hover:border-blue-500/30 transition-all">
                     <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
                         <i className="fa-solid fa-compass text-6xl text-blue-500"></i>
                     </div>
@@ -234,7 +234,7 @@ const Home: React.FC = () => {
                             />
                         ))}
                     </div>
-                </motion.div>
+                </div>
             </div>
 
             {/* NEW RELEASES CAROUSEL (GAME PASS STYLE) */}
@@ -278,13 +278,10 @@ const Home: React.FC = () => {
                     [...Array(8)].map((_, i) => (
                         <div key={i} className="aspect-[16/10] bg-[#181818] rounded-xl animate-pulse border border-white/5"></div>
                     ))
-                ) : (
+                ) : filteredShops.length > 0 ? (
                     filteredShops.map((shop, index) => (
-                        <motion.div
+                        <div
                             key={shop.id}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: index * 0.05 }}
                             // Adiciona efeito de grayscale e opacidade para lojas fechadas,
                             // com uma transição suave no hover para melhor UX.
                             className={!(shop.isOpen ?? true) ? 'grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition-all duration-300' : ''}
@@ -298,8 +295,13 @@ const Home: React.FC = () => {
                                 isClosed={!(shop.isOpen ?? true)}
                                 hasFreeDelivery={shop.deliveryFee === 0}
                             />
-                        </motion.div>
+                        </div>
                     ))
+                ) : (
+                    <div className="col-span-full text-center py-20 opacity-50">
+                        <i className="fa-solid fa-store-slash text-4xl mb-4"></i>
+                        <p>Nenhuma loja encontrada.</p>
+                    </div>
                 )}
             </div>
         </div>
@@ -348,29 +350,6 @@ const Home: React.FC = () => {
                 Finalizar Pedido
             </button>
          </div>
-      </div>
-
-      {/* MOBILE NAV (Visible only on mobile) */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[#121212]/95 backdrop-blur-xl border-t border-white/5 z-50 px-6 py-3 flex justify-between items-center">
-         <button onClick={() => navigate('/')} className="flex flex-col items-center text-[#FF8C00]">
-            <i className="fa-solid fa-home text-xl mb-1"></i>
-            <span className="text-[9px] font-black uppercase">Início</span>
-         </button>
-         <button onClick={() => navigate('/orders')} className="flex flex-col items-center text-gray-500 hover:text-white">
-            <i className="fa-solid fa-receipt text-xl mb-1"></i>
-            <span className="text-[9px] font-black uppercase">Pedidos</span>
-         </button>
-         <button onClick={() => navigate('/cart')} className="flex flex-col items-center text-gray-500 hover:text-white relative">
-            <div className="relative">
-                <i className="fa-solid fa-bag-shopping text-xl mb-1"></i>
-                {items.length > 0 && <span className="absolute -top-1 -right-1 w-3 h-3 bg-[#FF8C00] rounded-full"></span>}
-            </div>
-            <span className="text-[9px] font-black uppercase">Sacola</span>
-         </button>
-         <button onClick={() => navigate('/profile')} className="flex flex-col items-center text-gray-500 hover:text-white">
-            <i className="fa-solid fa-user text-xl mb-1"></i>
-            <span className="text-[9px] font-black uppercase">Perfil</span>
-         </button>
       </div>
     </div>
   );

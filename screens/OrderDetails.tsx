@@ -5,14 +5,18 @@ import toast from 'react-hot-toast';
 import { paymentService } from '../services/paymentService';
 import { ENV } from '../config/env';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { app } from '../firebase';
 
 const OrderDetails: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { profile } = useAuth();
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showReportModal, setShowReportModal] = useState(false);
@@ -21,7 +25,9 @@ const OrderDetails: React.FC = () => {
   const [ratingStore, setRatingStore] = useState(5);
   const [ratingCourier, setRatingCourier] = useState(5);
   const [ratingComment, setRatingComment] = useState('');
-  const [messages, setMessages] = useState<{ id: string; sender: string; text: string; createdAt: any }[]>([]);
+  const [messages, setMessages] = useState<{ id: string; sender: string; senderUid?: string; text: string; createdAt: any }[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [inputPin, setInputPin] = useState('');
   const ADMIN_PHONE = '5521971977574';
   const { addToCart, clearCart } = useCart();
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -69,11 +75,6 @@ const OrderDetails: React.FC = () => {
     const unsubscribe = onSnapshot(doc(db, 'pedidos', id), (docSnap) => {
       if (docSnap.exists()) {
         const orderData = { id: docSnap.id, ...docSnap.data() } as any;
-        console.log("[OrderDetails] Pedido encontrado:", orderData);
-        console.log("[OrderDetails] Tem deliveryCode?", !!orderData.deliveryCode);
-        console.log("[OrderDetails] Tem location?", !!orderData.location);
-        console.log("[OrderDetails] Tem endereco?", !!orderData.endereco);
-        console.log("[OrderDetails] Status:", orderData.status);
         setOrder(orderData);
       } else {
         console.error("[OrderDetails] Pedido não encontrado:", id);
@@ -82,8 +83,6 @@ const OrderDetails: React.FC = () => {
       setLoading(false);
     }, (error) => {
       console.error("[OrderDetails] Erro ao buscar pedido:", error);
-      console.error("[OrderDetails] Código:", error.code);
-      console.error("[OrderDetails] Mensagem:", error.message);
       setLoading(false);
       toast.error(`Erro ao carregar pedido: ${error.message}`);
     });
@@ -101,17 +100,44 @@ const OrderDetails: React.FC = () => {
     return () => unsub();
   }, [id]);
 
-  const sendQuickMessage = async (text: string) => {
-    if (!id || !order?.clienteUid) return;
+  const sendMessage = async (text: string) => {
+    if (!id || !text.trim()) return;
     try {
       await addDoc(collection(db, 'pedidos', id, 'messages'), {
-        sender: 'cliente',
-        text,
+        sender: profile?.tipoUsuario || 'usuario',
+        senderUid: profile?.uid,
+        text: text.trim(),
         createdAt: serverTimestamp(),
       });
-      toast.success('Mensagem enviada.');
+      setChatInput('');
+      // toast.success('Mensagem enviada.'); // Opcional, pode poluir a tela
     } catch {
       toast.error('Erro ao enviar mensagem.');
+    }
+  };
+
+  const verifyPin = async (pinToCheck: string) => {
+    if (!order || !id) return;
+    
+    const toastId = toast.loading("Validando PIN...");
+
+    try {
+      const functions = getFunctions(app, 'southamerica-east1');
+      const validateDeliveryPIN = httpsCallable(functions, 'validateDeliveryPIN');
+      
+      const result: any = await validateDeliveryPIN({ orderId: id, pin: pinToCheck });
+      
+      if (result.data.success) {
+        toast.success("PIN Confirmado! Entrega concluída. 🚀", { id: toastId });
+      } else {
+        toast.error(result.data.message || "PIN incorreto.", { id: toastId });
+      }
+    } catch (error: any) {
+      console.error("Erro ao validar PIN:", error);
+      const message = error.message || "Falha na comunicação com o servidor.";
+      toast.error(`Erro: ${message}`, { id: toastId });
+    } finally {
+      setInputPin('');
     }
   };
 
@@ -217,10 +243,6 @@ const OrderDetails: React.FC = () => {
           confirmadoPeloCliente: true,
           concluidoEm: new Date().toISOString()
         });
-
-        // Aqui você também poderia atualizar o saldo do vendedor se estivesse controlando saldo no documento do usuário
-        // Mas como estamos usando o cálculo dinâmico no Dashboard (baseado em pedidos concluídos), 
-        // apenas mudar o status para 'concluido' já libera o saldo visualmente lá.
       });
 
       toast.success("Pedido confirmado! Obrigado.");
@@ -399,61 +421,125 @@ const OrderDetails: React.FC = () => {
         </div>
         
         <div className="p-6">
-            {/* CÓDIGO DE ENTREGA - DIAGNÓSTICO */}
-            {order.status !== 'concluido' && order.status !== 'cancelado' && order.status !== 'em_disputa' && (
-            <div className="bg-gradient-to-r from-[#FF8C00] to-[#FF4500] p-6 rounded-2xl mb-6 text-center shadow-lg relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-full bg-white/10 backdrop-blur-xl"></div>
-                <div className="relative z-10">
-                <p className="text-white/80 text-[10px] font-black uppercase tracking-[0.3em] mb-2">
-                    {order.deliveryCode ? 'Código de Segurança' : 'Aguardando código...'}
-                </p>
-                {order.deliveryCode ? (
-                    <>
-                    <div className="bg-white text-black text-4xl font-black tracking-[0.3em] py-3 rounded-xl mb-2 select-all shadow-lg">
-                        {order.deliveryCode}
-                    </div>
-                    <p className="text-white text-xs font-bold flex items-center justify-center gap-2">
-                        <i className="fa-solid fa-lock"></i> Informe ao entregador para receber
+            {/* CÓDIGO DE ENTREGA - LÓGICA DUAL (CLIENTE vs ENTREGADOR) */}
+            {['entrega', 'pronto_retirada'].includes(order.status) && (
+            <>
+                {/* 1. VISÃO DO CLIENTE */}
+                {/* VISÃO DO CLIENTE: MOSTRA O PIN */}
+                {profile?.tipoUsuario === 'cliente' && profile?.uid === order.clienteUid && (
+                  <div className="bg-[#1A1A1A] p-6 rounded-3xl border border-[#FF8C00]/20 mb-6 text-center relative overflow-hidden">
+                    <h3 className="text-gray-400 text-[10px] font-black uppercase tracking-[0.2em] mb-4">Seu Código de Segurança</h3>
+                    {order.deliveryCode ? (
+                      <div className="flex gap-2 justify-center mb-4">
+                        {order.deliveryCode.split('').map((num: string, i: number) => (
+                          <span key={i} className="text-3xl font-black text-[#FF8C00] bg-white/5 w-12 h-16 flex items-center justify-center rounded-xl border border-white/10 shadow-inner">
+                            {num}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="bg-white/5 text-white text-2xl font-black py-4 rounded-xl mb-2 animate-pulse">
+                        <i className="fa-solid fa-hourglass-half animate-pulse"></i>
+                      </div>
+                    )}
+                    <p className="text-[10px] text-gray-500 font-bold flex items-center justify-center gap-2">
+                      <i className="fa-solid fa-lock"></i> Informe este código para {order.deliveryMode === 'pickup' ? 'o lojista' : 'o entregador'}
                     </p>
-                    </>
-                ) : (
-                    <div className="bg-white/20 text-white text-2xl font-black py-4 rounded-xl mb-2">
-                    <i className="fa-solid fa-hourglass-half animate-pulse"></i>
-                    </div>
+                  </div>
                 )}
-                </div>
-            </div>
+
+                {/* 2. VISÃO DO ENTREGADOR / LOJISTA (Confirmação de PIN) */}
+                {(profile?.tipoUsuario === 'entregador' && profile?.uid === order.entregadorUid) || 
+                 (profile?.tipoUsuario === 'vendedor' && profile?.uid === order.lojaId && order.deliveryMode === 'pickup')
+                 ? (
+                  <div className="bg-[#FF8C00] p-6 rounded-3xl text-black mb-6 text-center shadow-[0_0_30px_rgba(255,140,0,0.2)]">
+                    <h3 className="font-black uppercase text-xs tracking-widest mb-4 text-black/70">Confirmar Entrega</h3>
+                    <div className="relative">
+                    <input 
+                      type="number" 
+                      value={inputPin}
+                      placeholder="PIN"
+                      className="w-full p-4 rounded-2xl bg-black/10 border-none placeholder:text-black/30 font-black text-center text-3xl tracking-[0.5em] outline-none focus:bg-black/20 transition-all text-black"
+                      onChange={(e) => {
+                        const val = e.target.value.slice(0, 4);
+                        setInputPin(val);
+                        if(val.length === 4) verifyPin(val);
+                      }}
+                    />
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 text-black/30 pointer-events-none">
+                          <i className="fa-solid fa-key"></i>
+                      </div>
+                    </div>
+                    <p className="text-black/60 text-[10px] mt-3 font-bold uppercase tracking-wide">
+                      Solicite o código de 4 dígitos
+                    </p>
+                  </div>
+                ) : null}
+            </>
             )}
 
-            {/* Chat de status: mensagens rápidas */}
+            {/* CHAT SYSTEM COMPLETO */}
             {order.status !== 'cancelado' && order.status !== 'concluido' && (
-            <div className="bg-black/20 rounded-2xl p-4 border border-white/5">
-                <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 flex items-center">
-                <i className="fa-solid fa-comments mr-2 text-[#FF8C00]"></i> Chat Rápido
-                </p>
-                <div className="flex flex-wrap gap-2 mb-4">
-                {quickMessagesClient.map((msg) => (
-                    <button key={msg} onClick={() => sendQuickMessage(msg)} className="px-3 py-2 rounded-xl bg-white/5 hover:bg-[#FF8C00]/20 text-gray-300 hover:text-white text-[10px] font-bold border border-white/5 hover:border-[#FF8C00]/30 transition-all active:scale-95">
-                    {msg}
-                    </button>
-                ))}
+            <div className="bg-[#0F0F0F] rounded-3xl border border-white/5 overflow-hidden">
+                <div className="p-3 bg-white/5 border-b border-white/5 flex items-center gap-2">
+                   <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                   <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Chat do Pedido</span>
                 </div>
 
-                {messages.length > 0 && (
-                <div className="space-y-3 max-h-48 overflow-y-auto custom-scrollbar p-2 bg-black/20 rounded-xl">
-                    {messages.map((m) => (
-                    <div key={m.id} className={`flex ${m.sender === 'cliente' ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[80%] p-3 rounded-2xl text-xs ${m.sender === 'cliente' ? 'bg-[#FF8C00]/20 text-white rounded-tr-none' : 'bg-white/10 text-gray-300 rounded-tl-none'}`}>
-                        <p>{m.text}</p>
-                        <span className="text-[9px] opacity-50 block text-right mt-1">
-                            {m.createdAt?.toDate ? new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(m.createdAt.toDate()) : ''}
-                        </span>
+                <div className="h-[350px] overflow-y-auto custom-scrollbar p-4 space-y-4 bg-black/20">
+                    {messages.length === 0 && (
+                      <div className="text-center text-gray-600 text-xs py-10">
+                        Nenhuma mensagem ainda.
+                      </div>
+                    )}
+                    {messages.map((m) => {
+                      const isMe = m.senderUid === profile?.uid;
+                      return (
+                        <div key={m.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`max-w-[80%] p-3 rounded-2xl text-sm relative ${isMe ? 'bg-[#FF8C00] text-black font-bold rounded-tr-none' : 'bg-[#1A1A1A] text-white rounded-tl-none border border-white/10'}`}>
+                              <p>{m.text}</p>
+                              <span className={`text-[9px] block text-right mt-1 font-bold ${isMe ? 'text-black/50' : 'text-gray-600'}`}>
+                                  {m.createdAt?.toDate ? new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(m.createdAt.toDate()) : '...'}
+                              </span>
+                            </div>
                         </div>
-                    </div>
-                    ))}
+                      );
+                    })}
                     <div ref={messagesEndRef} />
                 </div>
-                )}
+
+                {/* Área de Input e Mensagens Rápidas */}
+                <div className="p-3 bg-[#141414] border-t border-white/5">
+                   {/* Mensagens Rápidas (Apenas para Cliente por enquanto, pode expandir) */}
+                   {profile?.uid === order.clienteUid && (
+                     <div className="flex gap-2 overflow-x-auto pb-3 custom-scrollbar mb-2">
+                        {quickMessagesClient.map((msg) => (
+                            <button key={msg} onClick={() => sendMessage(msg)} className="whitespace-nowrap px-3 py-1.5 rounded-lg bg-white/5 hover:bg-[#FF8C00]/20 text-gray-400 hover:text-[#FF8C00] text-[10px] font-bold border border-white/5 transition-all">
+                            {msg}
+                            </button>
+                        ))}
+                     </div>
+                   )}
+                   
+                   <form 
+                     onSubmit={(e) => { e.preventDefault(); sendMessage(chatInput); }}
+                     className="flex gap-2"
+                   >
+                      <input 
+                        value={chatInput}
+                        onChange={(e) => setChatInput(e.target.value)}
+                        placeholder="Digite sua mensagem..."
+                        className="flex-1 bg-white/5 border border-white/10 rounded-full px-4 py-3 text-sm text-white focus:border-[#FF8C00] outline-none transition-colors"
+                      />
+                      <button 
+                        type="submit"
+                        disabled={!chatInput.trim()}
+                        className="w-11 h-11 bg-[#FF8C00] text-black rounded-full flex items-center justify-center hover:scale-105 active:scale-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <i className="fa-solid fa-paper-plane text-sm"></i>
+                      </button>
+                   </form>
+                </div>
             </div>
             )}
         </div>
@@ -572,7 +658,8 @@ const OrderDetails: React.FC = () => {
 
       {/* Barra de Ações Fixa (Mobile Friendly) */}
       <div className="fixed bottom-0 left-0 right-0 bg-[#141414]/95 backdrop-blur-lg border-t border-white/10 p-4 z-50 flex gap-3 safe-area-bottom">
-        {order.status === 'pendente' && (
+        {/* Ações exclusivas do CLIENTE */}
+        {profile?.uid === order.clienteUid && order.status === 'pendente' && (
           <>
             <button
               onClick={handleEditOrder}
@@ -589,7 +676,7 @@ const OrderDetails: React.FC = () => {
           </>
         )}
 
-        {order.status === 'concluido' && !order.avaliado && (
+        {profile?.uid === order.clienteUid && order.status === 'concluido' && !order.avaliado && (
           <button 
             onClick={() => setShowRatingModal(true)}
             className="w-full py-4 bg-[#FF8C00] text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-lg active:scale-95 transition-all"
@@ -598,7 +685,8 @@ const OrderDetails: React.FC = () => {
           </button>
         )}
 
-        {(order.status === 'entregue' || order.status === 'pronto_retirada' || order.status === 'em_disputa') && (
+        {/* Botão de confirmação manual (Fallback para cliente se o PIN falhar ou não for usado) */}
+        {profile?.uid === order.clienteUid && (order.status === 'entregue' || order.status === 'pronto_retirada' || order.status === 'em_disputa') && (
           <button 
             onClick={confirmReceipt}
             className="w-full py-4 bg-green-600 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-lg active:scale-95 transition-all animate-pulse"

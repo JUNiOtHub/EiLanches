@@ -15,6 +15,8 @@ import {
   Filler,
 } from 'chart.js';
 import { Bar, Line } from 'react-chartjs-2';
+import { motion, AnimatePresence } from 'framer-motion';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db, collection, onSnapshot, query, where, orderBy, updateDoc, doc, firebaseConfig, addDoc, deleteDoc, getDocs, writeBatch, serverTimestamp, getDoc } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 // import { asaasService } from '@/services/asaas'; // Removido - migramos para Mercado Pago
@@ -227,8 +229,9 @@ const ProductionQueue: React.FC<{
   onNotifyPickup: (id: string) => void;
   profile: any;
   onSelectOrder: (order: any) => void; // Para abrir o modal de detalhes
+  selectedOrderId?: string; // Para destacar o pedido selecionado
   onDeleteOrder: (orderId: string) => void; // Para deletar pedidos
-}> = ({ orders, onUpdateStatus, onNotifyDriver, onNotifyPickup, profile, onSelectOrder, onDeleteOrder }) => {
+}> = ({ orders, onUpdateStatus, onNotifyDriver, onNotifyPickup, profile, onSelectOrder, selectedOrderId, onDeleteOrder }) => {
   const [filter, setFilter] = useState('todos');
   
   const getTimeAgo = (date: any) => {
@@ -330,13 +333,14 @@ const ProductionQueue: React.FC<{
       <div className="space-y-4">
         {sortedOrders.map(pedido => {
             const delayed = isDelayed(pedido) || isPendingDelayed(pedido);
+            const isSelected = pedido.id === selectedOrderId;
             const statusConfig = getStatusConfigAdmin(pedido.status, delayed);
             
             return (
             <div 
               key={pedido.id} 
               onClick={() => onSelectOrder(pedido)}
-              className={`bg-[#1A1A1A] border border-white/5 rounded-2xl p-4 flex flex-col justify-between h-auto relative overflow-hidden group cursor-pointer hover:border-white/20 transition-all active:scale-[0.99] ${statusConfig.pulse ? 'animate-pulse' : ''}`}
+              className={`bg-[#1A1A1A] rounded-2xl p-4 flex flex-col justify-between h-auto relative overflow-hidden group cursor-pointer hover:border-white/20 transition-all active:scale-[0.99] ${statusConfig.pulse ? 'animate-pulse' : ''} ${isSelected ? 'border-2 border-[#FF8C00] shadow-lg' : 'border border-white/5'}`}
             >
                 
                 {/* Status Tag (Barra Lateral) */}
@@ -491,6 +495,160 @@ const ProductionQueue: React.FC<{
   );
 };
 
+const DashboardSidebar: React.FC<{ tab: string; setTab: (tab: any) => void; profile: any; signOut: () => void; }> = ({ tab, setTab, profile, signOut }) => (
+  <div className="hidden md:flex flex-col w-20 lg:w-64 bg-[#121212] border-r border-white/5 h-full pt-8 px-4 gap-2 shrink-0 z-20">
+    <div className="px-2 lg:px-4 mb-8 flex items-center gap-3">
+      <div className="w-10 h-10 bg-gradient-to-br from-[#FF8C00] to-[#FF4500] rounded-xl flex items-center justify-center shadow-lg shadow-[#FF8C00]/20 shrink-0">
+        <i className="fa-solid fa-store text-white text-lg"></i>
+      </div>
+      <div className="hidden lg:block">
+        <h1 className="text-xl font-black tracking-tighter italic leading-none">Painel</h1>
+        <p className="text-[8px] font-bold text-gray-500 uppercase tracking-[0.3em]">Vendedor</p>
+      </div>
+    </div>
+    
+    <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar">
+      {[
+        { id: 'pedidos', label: 'Pedidos', icon: 'fa-list-check' },
+        { id: 'metricas', label: 'Métricas', icon: 'fa-chart-pie' },
+        { id: 'carteira', label: 'Carteira', icon: 'fa-wallet' },
+        { id: 'loja', label: 'Loja', icon: 'fa-store' },
+        { id: 'cupons', label: 'Cupons', icon: 'fa-ticket' },
+      ].map((t) => (
+        <button
+          key={t.id}
+          onClick={() => setTab(t.id as any)}
+          className={`w-full flex items-center gap-4 p-3 rounded-xl transition-all duration-200 group relative overflow-hidden ${tab === t.id ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.3)]' : 'hover:bg-white/5 text-gray-400 hover:text-white'}`}
+        >
+          {tab === t.id && <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#FF8C00]"></div>}
+          <span className="text-lg w-6 text-center"><i className={`fa-solid ${t.icon}`}></i></span>
+          <span className="text-xs font-black uppercase tracking-wide z-10 hidden lg:block">{t.label}</span>
+        </button>
+      ))}
+    </div>
+
+    <div className="mt-auto mb-8">
+      <button onClick={() => signOut()} className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-red-500/10 text-red-500 transition-colors group">
+        <img src={profile?.image || `https://ui-avatars.com/api/?name=${profile?.nomeLoja || 'User'}`} className="w-8 h-8 rounded-full border-2 border-white/10 group-hover:border-red-500" alt="Profile" />
+        <div className="hidden lg:block text-left">
+          <p className="text-xs font-bold text-white truncate w-32">{profile?.nomeLoja || 'Visitante'}</p>
+          <p className="text-[9px] text-red-500 uppercase font-black">Sair</p>
+        </div>
+      </button>
+    </div>
+  </div>
+);
+
+const SellerOrderDetailPanel: React.FC<{ order: any; onClose: () => void; onUpdateStatus: (id: string, status: string) => void; onVerifyPin: (orderId: string, pin: string) => void; }> = ({ order, onClose, onUpdateStatus, onVerifyPin }) => {
+  if (!order) return null;
+
+  const statusConfig = getStatusConfig(order.status, false);
+  const [inputPin, setInputPin] = useState('');
+
+  // Limpa o PIN quando o pedido selecionado muda
+  useEffect(() => { setInputPin(''); }, [order]);
+
+  return (
+    <div className="w-full h-full bg-[#121212] border-l border-white/5 flex flex-col">
+      {/* Header */}
+      <div className="p-6 border-b border-white/5 flex items-center justify-between shrink-0">
+        <div>
+          <h3 className="text-lg font-black text-white">Pedido #{order.id.slice(-4)}</h3>
+          <p className="text-xs text-gray-400">{order.clienteNome}</p>
+        </div>
+        <button onClick={onClose} className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center text-gray-400 hover:bg-white/10 hover:text-white transition-colors">
+          <i className="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      {/* Scrollable Content */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+        {/* Status */}
+        <div className={`p-4 rounded-2xl border ${statusConfig.border} ${statusConfig.bg}`}>
+          <p className={`text-[10px] font-black uppercase tracking-widest ${statusConfig.color}`}>Status</p>
+          <p className={`text-lg font-black ${statusConfig.color}`}>{statusConfig.label}</p>
+        </div>
+
+        {/* Items */}
+        <div>
+          <h4 className="text-gray-400 text-xs font-black uppercase tracking-widest mb-3">Itens</h4>
+          <div className="space-y-3">
+            {order.itens.map((item: any, idx: number) => (
+              <div key={idx} className="bg-black/40 p-3 rounded-xl border border-white/5 flex gap-3">
+                <span className="w-8 h-8 bg-white/5 rounded-lg flex items-center justify-center text-xs font-black text-gray-400">{item.quantity}x</span>
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-white">{item.name}</p>
+                </div>
+                <p className="text-sm font-bold text-white">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.price * item.quantity)}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Financials */}
+        <div>
+          <h4 className="text-gray-400 text-xs font-black uppercase tracking-widest mb-3">Financeiro</h4>
+          <div className="bg-black/40 p-4 rounded-xl border border-white/5 space-y-2 text-xs">
+            <div className="flex justify-between"><span className="text-gray-400">Subtotal</span> <span className="text-white">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.subtotal || 0)}</span></div>
+            <div className="flex justify-between"><span className="text-gray-400">Taxa de Entrega</span> <span className="text-white">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.deliveryFee || 0)}</span></div>
+            <div className="flex justify-between"><span className="text-gray-400">Taxa do App</span> <span className="text-red-400">- {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.appFee || 0)}</span></div>
+            <div className="flex justify-between items-center pt-2 border-t border-white/10 mt-2">
+              <span className="text-white font-bold text-sm">SEU LUCRO</span>
+              <span className="text-green-500 font-black text-lg">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.netValue || 0)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Customer Info */}
+        <div>
+          <h4 className="text-gray-400 text-xs font-black uppercase tracking-widest mb-3">Cliente & Entrega</h4>
+          <div className="bg-black/40 p-4 rounded-xl border border-white/5 space-y-3">
+            <p className="text-sm text-gray-300"><i className="fa-solid fa-location-dot w-5 text-center text-[#FF8C00] mr-2"></i>{order.endereco}</p>
+            <p className="text-sm text-gray-300"><i className="fa-brands fa-whatsapp w-5 text-center text-green-500 mr-2"></i>{order.clienteTelefone || 'Não informado'}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer Actions */}
+      <div className="p-6 border-t border-white/5 shrink-0 space-y-3">
+        {order.status === 'pendente' && (
+          <button onClick={() => onUpdateStatus(order.id, 'preparando')} className="w-full py-4 bg-[#FF8C00] text-white rounded-xl font-black uppercase text-xs tracking-widest shadow-lg active:scale-95">Aceitar Pedido</button>
+        )}
+        {order.status === 'preparando' && (
+          <button onClick={() => onUpdateStatus(order.id, order.deliveryMode === 'pickup' ? 'pronto_retirada' : 'entrega')} className="w-full py-4 bg-blue-600 text-white rounded-xl font-black uppercase text-xs tracking-widest shadow-lg active:scale-95">
+            {order.deliveryMode === 'pickup' ? 'Pronto para Retirada' : 'Saiu para Entrega'}
+          </button>
+        )}
+        {order.status === 'entrega' && (
+          <div className="w-full py-3 text-center bg-green-500/10 text-green-500 rounded-xl font-bold uppercase text-[10px] tracking-widest border border-green-500/20">
+            Aguardando Confirmação do Entregador
+          </div>
+        )}
+        {/* LÓGICA DE PIN PARA RETIRADA NA LOJA */}
+        {order.status === 'pronto_retirada' && (
+          <div className="space-y-3">
+            <p className="text-center text-xs text-gray-400 font-bold">Solicite o PIN ao cliente para finalizar.</p>
+            <input 
+              type="number" 
+              value={inputPin}
+              placeholder="PIN do Cliente"
+              className="w-full p-4 rounded-2xl bg-black/20 border border-white/10 placeholder:text-gray-600 font-black text-center text-2xl tracking-[0.3em] outline-none focus:border-[#FF8C00] transition-all text-white"
+              onChange={(e) => {
+                const val = e.target.value.slice(0, 4);
+                setInputPin(val);
+                if(val.length === 4) onVerifyPin(order.id, val);
+              }}
+            />
+            <button onClick={() => onVerifyPin(order.id, inputPin)} disabled={inputPin.length !== 4} className="w-full py-3 bg-green-600 text-white rounded-xl font-black uppercase text-xs tracking-widest shadow-lg active:scale-95 disabled:opacity-50">
+              Confirmar Retirada
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -507,7 +665,7 @@ const Dashboard: React.FC = () => {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
-  const [completedOrders, setCompletedOrders] = useState<any[]>([]);
+  const [completedOrders, setCompletedOrders] = useState<any[]>([]); // Mantido para métricas
   const [error, setError] = useState<string | null>(null);
   const [isConfigError, setIsConfigError] = useState(false);
   const [showPix, setShowPix] = useState(false);
@@ -566,6 +724,7 @@ const Dashboard: React.FC = () => {
   const [orderToDeleteId, setOrderToDeleteId] = useState<string | null>(null); // Novo estado para deletar
   const [draggedItem, setDraggedItem] = useState<any>(null); // Estado para Drag and Drop
   const [menuSearch, setMenuSearch] = useState(''); // Estado para busca no cardápio
+  const [shopRating, setShopRating] = useState({ rating: 5, count: 0 }); // Estado para avaliação da loja
 
   // Estados para Crop de Imagem
   const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -811,6 +970,7 @@ const Dashboard: React.FC = () => {
           // Garante que a imagem venha de qualquer campo possível
           image: data.image || data.foto || ''
         }));
+        setShopRating({ rating: data.rating || 5, count: data.ratingCount || 0 });
         if (data.businessHours) setBusinessHours(data.businessHours);
         if (data.isKitchenBusy) setIsKitchenBusy(data.isKitchenBusy);
         if (data.dailyGoal) setDailyGoal(data.dailyGoal);
@@ -1084,6 +1244,29 @@ const Dashboard: React.FC = () => {
       toast.error("Erro ao alterar status da loja.");
     }
   };
+
+  // Função para chamar a Cloud Function de validação de PIN
+  const verifyPinWithCloudFunction = async (orderId: string, pin: string) => {
+    const toastId = toast.loading("Validando PIN...");
+    try {
+      const functions = getFunctions(firebaseConfig as any, 'southamerica-east1');
+      const validateDeliveryPIN = httpsCallable(functions, 'validateDeliveryPIN');
+      
+      const result: any = await validateDeliveryPIN({ orderId, pin });
+      
+      if (result.data.success) {
+        toast.success("Entrega confirmada com sucesso!", { id: toastId });
+        setSelectedOrder(null); // Fecha o painel de detalhes
+      } else {
+        toast.error(result.data.message || "PIN incorreto.", { id: toastId });
+      }
+    } catch (error: any) {
+      console.error("Erro ao validar PIN:", error);
+      const message = error.message || "Falha na comunicação com o servidor.";
+      toast.error(`Erro: ${message}`, { id: toastId });
+    }
+  };
+
 
   const handleSaveStoreProfile = async () => {
     if (!profile?.uid) return;
@@ -1584,6 +1767,7 @@ const Dashboard: React.FC = () => {
                 onNotifyDriver={notifyDriver} 
                 onNotifyPickup={notifyReadyForPickup}
                 profile={profile}
+                selectedOrderId={selectedOrder?.id}
                 onDeleteOrder={handleDeleteOrder} // Passa a função de deletar
                 onSelectOrder={setSelectedOrder}
               />
@@ -1591,100 +1775,112 @@ const Dashboard: React.FC = () => {
           )}
 
           {/* CONTEÚDO DA ABA: MÉTRICAS */}
-          {tab === 'metricas' && (
-            <div className="flex-1 space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-              
-              {/* META DIÁRIA (GAMIFICATION) */}
-              <div className="bg-gradient-to-r from-[#1E1E1E] to-[#252525] p-6 rounded-[32px] border border-white/5 shadow-lg">
-                <div className="flex justify-between items-end mb-2">
-                  <div>
-                    <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-1">Meta Diária</p>
-                    <h3 className="text-white font-black text-xl">R$ {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(metrics.faturamentoBrutoHoje)} <span className="text-gray-600 text-sm">/ {dailyGoal}</span></h3>
+          <AnimatePresence>
+            {tab === 'metricas' && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 space-y-6">
+                
+                {/* META DIÁRIA (GAMIFICATION) */}
+                <div className="bg-gradient-to-r from-[#1E1E1E] to-[#252525] p-6 rounded-[32px] border border-white/5 shadow-lg">
+                  <div className="flex justify-between items-end mb-2">
+                    <div>
+                      <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-1">Meta Diária</p>
+                      <h3 className="text-white font-black text-xl">R$ {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(metrics.faturamentoBrutoHoje)} <span className="text-gray-600 text-sm">/ {dailyGoal}</span></h3>
+                    </div>
+                    <p className="text-[#FF8C00] font-black text-lg">{Math.min(100, Math.round((metrics.faturamentoBrutoHoje / dailyGoal) * 100))}%</p>
                   </div>
-                  <p className="text-[#FF8C00] font-black text-lg">{Math.min(100, Math.round((metrics.faturamentoBrutoHoje / dailyGoal) * 100))}%</p>
+                  <div className="h-3 bg-black/50 rounded-full overflow-hidden border border-white/5">
+                    <div className="h-full bg-gradient-to-r from-[#FF8C00] to-[#FF4500] transition-all duration-1000 ease-out" style={{ width: `${Math.min(100, (metrics.faturamentoBrutoHoje / dailyGoal) * 100)}%` }}></div>
+                  </div>
+                  <p className="text-gray-500 text-[10px] mt-2 text-right">{metrics.faturamentoBrutoHoje >= dailyGoal ? "🎉 Meta batida! Parabéns!" : `Faltam R$ ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(dailyGoal - metrics.faturamentoBrutoHoje)} para a meta.`}</p>
                 </div>
-                <div className="h-3 bg-black/50 rounded-full overflow-hidden border border-white/5">
-                  <div className="h-full bg-gradient-to-r from-[#FF8C00] to-[#FF4500] transition-all duration-1000 ease-out" style={{ width: `${Math.min(100, (metrics.faturamentoBrutoHoje / dailyGoal) * 100)}%` }}></div>
-                </div>
-                <p className="text-gray-500 text-[10px] mt-2 text-right">{metrics.faturamentoBrutoHoje >= dailyGoal ? "🎉 Meta batida! Parabéns!" : `Faltam R$ ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(dailyGoal - metrics.faturamentoBrutoHoje)} para a meta.`}</p>
-              </div>
 
-              {/* RELATÓRIO DE ITENS ESQUECIDOS (OPORTUNIDADE) */}
-              {forgottenItems.length > 0 && (
-                <div className="bg-[#1E1E1E] p-6 rounded-[32px] border border-white/5 shadow-xl">
-                  <h3 className="text-white font-bold mb-4 text-sm flex items-center">
-                    <i className="fa-solid fa-ghost text-gray-500 mr-2"></i>
-                    Lanches "Esquecidos" <span className="text-gray-600 text-[10px] ml-2 font-normal">(Sem vendas há 7 dias)</span>
-                  </h3>
-                  <div className="space-y-3">
-                    {forgottenItems.map(item => (
-                      <div key={item.id} className="flex justify-between items-center bg-black/20 p-3 rounded-xl border border-white/5 hover:border-[#FF8C00]/30 transition-colors">
-                        <div className="flex items-center gap-3">
-                          <img src={item.image} className="w-10 h-10 rounded-lg object-cover opacity-60 grayscale" alt={item.name} onError={handleImageError} />
-                          <div>
-                            <p className="text-gray-300 text-xs font-bold">{item.name}</p>
-                            <p className="text-gray-600 text-[10px]">R$ {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.price)}</p>
+                {/* RELATÓRIO DE ITENS ESQUECIDOS (OPORTUNIDADE) */}
+                {forgottenItems.length > 0 && (
+                  <div className="bg-[#1E1E1E] p-6 rounded-[32px] border border-white/5 shadow-xl">
+                    <h3 className="text-white font-bold mb-4 text-sm flex items-center">
+                      <i className="fa-solid fa-ghost text-gray-500 mr-2"></i>
+                      Lanches "Esquecidos" <span className="text-gray-600 text-[10px] ml-2 font-normal">(Sem vendas há 7 dias)</span>
+                    </h3>
+                    <div className="space-y-3">
+                      {forgottenItems.map(item => (
+                        <div key={item.id} className="flex justify-between items-center bg-black/20 p-3 rounded-xl border border-white/5 hover:border-[#FF8C00]/30 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <img src={item.image} className="w-10 h-10 rounded-lg object-cover opacity-60 grayscale" alt={item.name} onError={handleImageError} />
+                            <div>
+                              <p className="text-gray-300 text-xs font-bold">{item.name}</p>
+                              <p className="text-gray-600 text-[10px]">R$ {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.price)}</p>
+                            </div>
                           </div>
+                          <button onClick={() => { setEditingItem(item); setShowItemForm(true); setTab('loja'); }} className="text-[#FF8C00] text-[9px] font-black uppercase tracking-widest hover:text-white transition-colors border border-[#FF8C00]/30 px-3 py-1.5 rounded-lg hover:bg-[#FF8C00] hover:border-[#FF8C00]">Criar Promoção</button>
                         </div>
-                        <button onClick={() => { setEditingItem(item); setShowItemForm(true); setTab('loja'); }} className="text-[#FF8C00] text-[9px] font-black uppercase tracking-widest hover:text-white transition-colors border border-[#FF8C00]/30 px-3 py-1.5 rounded-lg hover:bg-[#FF8C00] hover:border-[#FF8C00]">Criar Promoção</button>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              <DailyMetrics metrics={metrics} onExport={handleExportDay} />
-              
-              {/* GRÁFICO DE VENDAS */}
-              <div className="bg-[#1E1E1E] p-6 rounded-[32px] border border-white/5 shadow-xl">
-                <h3 className="text-white font-bold mb-6 text-sm flex items-center">
-                  <i className="fa-solid fa-chart-column text-[#FF8C00] mr-2"></i>
-                  Vendas da Semana
-                </h3>
-                <div className="h-64 w-full">
-                  <Bar 
-                    data={metrics.chartData} 
-                    options={{
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      plugins: {
-                        legend: { display: false },
-                        tooltip: { 
-                          backgroundColor: '#1A1A1A', 
-                          titleColor: '#fff', 
-                          bodyColor: '#FF8C00',
-                          borderColor: 'rgba(255,255,255,0.1)',
-                          borderWidth: 1,
-                          padding: 10,
-                          displayColors: false,
-                          callbacks: {
-                            label: (context) => `R$ ${context.parsed.y.toFixed(2)}`
+                <DailyMetrics metrics={metrics} onExport={handleExportDay} />
+                
+                {/* GRÁFICO DE VENDAS */}
+                <div className="bg-[#1E1E1E] p-6 rounded-[32px] border border-white/5 shadow-xl">
+                  <h3 className="text-white font-bold mb-6 text-sm flex items-center">
+                    <i className="fa-solid fa-chart-column text-[#FF8C00] mr-2"></i>
+                    Vendas da Semana
+                  </h3>
+                  <div className="h-64 w-full">
+                  {/* AVALIAÇÃO DA LOJA */}
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="flex items-center gap-1 bg-[#FF8C00] text-white px-2 py-0.5 rounded-md font-bold text-xs">
+                      <i className="fa-solid fa-star text-[10px]"></i> {shopRating.rating.toFixed(1)}
+                    </span>
+                    <p className="text-gray-400 text-xs">
+                      Baseado em {shopRating.count} {shopRating.count === 1 ? 'avaliação' : 'avaliações'}.
+                    </p>
+                  </div>
+
+                    <Bar 
+                      data={metrics.chartData} 
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: { display: false },
+                          tooltip: { 
+                            backgroundColor: '#1A1A1A', 
+                            titleColor: '#fff', 
+                            bodyColor: '#FF8C00',
+                            borderColor: 'rgba(255,255,255,0.1)',
+                            borderWidth: 1,
+                            padding: 10,
+                            displayColors: false,
+                            callbacks: {
+                              label: (context) => `R$ ${context.parsed.y.toFixed(2)}`
+                            }
+                          }
+                        },
+                        scales: {
+                          y: { 
+                            beginAtZero: true, 
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { color: '#666', font: { size: 10 }, callback: (value) => `R$ ${value}` },
+                            border: { display: false }
+                          },
+                          x: { 
+                            grid: { display: false },
+                            ticks: { color: '#888', font: { size: 10 } },
+                            border: { display: false }
                           }
                         }
-                      },
-                      scales: {
-                        y: { 
-                          beginAtZero: true, 
-                          grid: { color: 'rgba(255,255,255,0.05)' },
-                          ticks: { color: '#666', font: { size: 10 }, callback: (value) => `R$ ${value}` },
-                          border: { display: false }
-                        },
-                        x: { 
-                          grid: { display: false },
-                          ticks: { color: '#888', font: { size: 10 } },
-                          border: { display: false }
-                        }
-                      }
-                    }} 
-                  />
+                      }} 
+                    />
+                  </div>
                 </div>
-              </div>
-            </div>
-          )}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* CONTEÚDO DA ABA: CARTEIRA */}
           {tab === 'carteira' && (
-            <div className="flex-1 space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 space-y-6">
               <div className="bg-gradient-to-br from-[#1E1E1E] to-black p-8 rounded-[40px] border border-white/10 text-center shadow-2xl relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-[#FF8C00]/10 rounded-full blur-3xl"></div>
                 <p className="text-gray-500 text-xs font-black uppercase tracking-widest mb-2">Saldo Liberado</p>
@@ -1768,12 +1964,12 @@ const Dashboard: React.FC = () => {
                   ))
                 )}
               </div>
-            </div>
+            </motion.div>
           )}
 
           {/* CONTEÚDO DA ABA: CUPONS */}
           {tab === 'cupons' && (
-            <div className="flex-1 space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 space-y-8">
               {/* Formulário de Criação */}
               <div className="bg-[#1E1E1E] p-6 rounded-[32px] border border-white/10">
                 <h3 className="text-white font-black uppercase text-[10px] tracking-[0.2em] mb-4 flex items-center">
@@ -1844,12 +2040,12 @@ const Dashboard: React.FC = () => {
                 ))}
                 {coupons.length === 0 && <p className="text-center text-gray-600 text-xs">Nenhum cupom ativo.</p>}
               </div>
-            </div>
+            </motion.div>
           )}
 
           {/* CONTEÚDO DA ABA: LOJA */}
           {tab === 'loja' && (
-            <div className="flex-1 space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 space-y-8">
               
               {/* IDENTIDADE DA LOJA (PERFIL) */}
               <div className="bg-[#1E1E1E] p-6 rounded-[32px] border border-white/5">
@@ -2356,7 +2552,7 @@ const Dashboard: React.FC = () => {
                   )}
                 </div>
               </div>
-            </div>
+            </motion.div>
           )}
         </>
       )}
@@ -2411,15 +2607,13 @@ const Dashboard: React.FC = () => {
       />
 
       {/* MODAL DE DETALHES DO PEDIDO (CONTROLE REMOTO) */}
-      {/* <SellerOrderModal
-          order={selectedOrder}
-          onClose={() => setSelectedOrder(null)}
-          onUpdateStatus={updateStatus}
-          onNotifyDriver={notifyDriver}
-          onNotifyPickup={notifyReadyForPickup}
-          onCancelOrder={handleCancelOrderFromShop}
-          onDeleteOrder={handleDeleteOrder}
-        /> */}
+      <AnimatePresence>
+        {selectedOrder && (
+          <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', stiffness: 300, damping: 30 }} className="fixed top-0 right-0 bottom-0 w-full max-w-md z-50">
+            <SellerOrderDetailPanel order={selectedOrder} onClose={() => setSelectedOrder(null)} onUpdateStatus={updateStatus} onVerifyPin={verifyPinWithCloudFunction} />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
