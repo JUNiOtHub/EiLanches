@@ -1,13 +1,11 @@
-import { onCall } from 'firebase-functions/v2/https';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import { initializeApp } from 'firebase-admin/app';
-import * as admin from 'firebase-admin';
+/**
+ * Report Service — geração de relatórios semanais para lojistas.
+ * Usa inicialização centralizada do Firebase.
+ */
+import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { db, admin } from './config/firebase';
 
-// Inicialização
-if (!admin.apps.length) {
-  initializeApp();
-}
-const db = getFirestore();
+const FieldValue = admin.firestore.FieldValue;
 
 // Interfaces para tipagem forte
 interface OrderData {
@@ -49,11 +47,17 @@ interface WeeklyReport {
 /**
  * Gera relatório semanal de vendas para lojista em formato HTML
  */
-export const generateWeeklyReport = onCall(async (request) => {
+export const generateWeeklyReport = onCall({
+  region: 'southamerica-east1',
+}, async (request) => {
+  if (!request.auth?.uid) {
+    throw new HttpsError('unauthenticated', 'Usuario nao autenticado.');
+  }
+
   const { lojaId, startDate, endDate } = request.data;
 
   if (!lojaId || !startDate || !endDate) {
-    throw new Error('lojaId, startDate e endDate são obrigatórios');
+    throw new HttpsError('invalid-argument', 'lojaId, startDate e endDate sao obrigatorios.');
   }
 
   try {

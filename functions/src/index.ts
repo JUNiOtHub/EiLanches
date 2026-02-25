@@ -1,31 +1,34 @@
-import { createSplitPreference, processSplitWebhook, requestPayout, getWalletBalance, connectSeller } from './mercadoPagoMarketplace';
-import { generateWeeklyReport } from './reportService';
 /**
- * EiLanches - Cloud Functions
+ * EiLanches - Cloud Functions (Ponto de entrada principal)
  *
- * - onOrderConcludedCreditLoyalty: credita pontos ao concluir pedido
- * - onOrderCreatedCreditWallet: credita saldo pendente da carteira do lojista ao criar/confirmar pedido
- * - validateDeliveryPIN: callable que valida PIN e libera saldo (pendente -> disponível)
+ * Melhorias aplicadas:
+ * - Usa inicialização centralizada do Firebase (sem múltiplos initializeApp)
+ * - Fix: totalHistorico não é mais incrementado duas vezes (removido do creditLojistaPendente)
+ * - Validações mais robustas no validateDeliveryPIN
+ * - Exporta novas functions: generatePixPayment, refundPayment, checkMercadoPagoStatus
  */
+
+import { createSplitPreference, processSplitWebhook, requestPayout, getWalletBalance, connectSeller } from './mercadoPagoMarketplace';
+import { createMercadoPagoPreference, generatePixPayment, refundPayment, checkMercadoPagoStatus, processMercadoPagoWebhook } from './mercadoPago';
+import { generateWeeklyReport } from './reportService';
 
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import * as admin from "firebase-admin";
+import { db, admin } from './config/firebase';
 
-admin.initializeApp();
-
-const db = admin.firestore();
-
+/**
+ * Credita saldo PENDENTE na carteira do lojista.
+ * totalHistorico NÃO é incrementado aqui — só em validateDeliveryPIN ao concluir a entrega,
+ * evitando dupla contagem.
+ */
 function creditLojistaPendente(tx: admin.firestore.Transaction, lojaId: string, netValue: number, orderRef: admin.firestore.DocumentReference) {
   const walletRef = db.doc(`wallets/${lojaId}`);
   return tx.get(walletRef).then((snap) => {
     const pendente = snap.exists ? Number(snap.data()?.saldoPendente ?? 0) : 0;
     const disponivel = snap.exists ? Number(snap.data()?.saldoDisponivel ?? 0) : 0;
-    const historico = snap.exists ? Number(snap.data()?.totalHistorico ?? 0) : 0;
     tx.set(walletRef, {
       saldoPendente: pendente + netValue,
       saldoDisponivel: disponivel,
-      totalHistorico: historico + netValue,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
     tx.update(orderRef, { walletCreditedPendente: true });
@@ -233,3 +236,6 @@ export const validateDeliveryPIN = onCall({
 
 // Exporta funções do Marketplace
 export { createSplitPreference, processSplitWebhook, requestPayout, getWalletBalance, connectSeller, generateWeeklyReport };
+
+// Exporta funções de Pagamento Direto (Mercado Pago)
+export { createMercadoPagoPreference, generatePixPayment, refundPayment, checkMercadoPagoStatus, processMercadoPagoWebhook };

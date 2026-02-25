@@ -33,18 +33,22 @@ export const ENV = {
     deliveryBaseKm: Number(import.meta.env.VITE_DELIVERY_BASE_KM) || 3,
     minWithdrawValue: Number(import.meta.env.VITE_MIN_WITHDRAW_VALUE) || 50,
     withdrawTax: Number(import.meta.env.VITE_WITHDRAW_TAX) || 1.99,
-  }
+  },
+  // Mercado Pago (chave pública para o front — segura para expor)
+  mercadoPago: {
+    publicKey: import.meta.env.VITE_MERCADO_PAGO_PUBLIC_KEY || '',
+  },
 };
 
 Object.freeze(ENV);
 
 // Validação discreta: em desenvolvimento, apenas aviso para não poluir o console
 function validateEnv(): void {
-  if (!ENV.asaas.apiKey) {
-    console.warn('[EiLanches] VITE_ASAAS_KEY (ou VITE_ASAAS_API_KEY) não encontrada no .env. Pagamentos PIX podem falhar em produção.');
-  }
   if (!ENV.firebase.apiKey) {
-    console.warn('[EiLanches] VITE_FIREBASE_API_KEY não encontrada. O app pode falhar ao conectar ao Firebase.');
+    console.warn('[EiLanches] VITE_FIREBASE_API_KEY nao encontrada. O app pode falhar ao conectar ao Firebase.');
+  }
+  if (!ENV.mercadoPago.publicKey) {
+    console.warn('[EiLanches] VITE_MERCADO_PAGO_PUBLIC_KEY nao encontrada. Checkout do Mercado Pago pode falhar.');
   }
 }
 validateEnv();
